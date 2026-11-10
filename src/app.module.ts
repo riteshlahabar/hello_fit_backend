@@ -17,7 +17,12 @@ import { AvailabilityModule } from './modules/availability/availability.module';
 import { BookingModule } from './modules/booking/booking.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { CustomerModule } from './modules/customer/customer.module';
+import { AdminUserModule } from './modules/admin-user/admin-user.module';
+import { MastersModule } from './modules/masters/masters.module';
+import { InstructorModule } from './modules/instructor/instructor.module';
 import { PaymentModule } from './modules/payment/payment.module';
+import { PayoutModule } from './modules/payout/payout.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import { ReviewModule } from './modules/review/review.module';
 import { SessionModule } from './modules/session/session.module';
 import { WalletModule } from './modules/wallet/wallet.module';
@@ -41,6 +46,7 @@ import { PrismaModule } from './prisma/prisma.module';
     SettingsModule,
     AuthModule,
     CustomerModule,
+    InstructorModule,
     CatalogModule,
     AvailabilityModule,
     BookingModule,
@@ -48,7 +54,11 @@ import { PrismaModule } from './prisma/prisma.module';
     SessionModule,
     WalletModule,
     PaymentModule,
+    PayoutModule,
+    NotificationModule,
     ReviewModule,
+    MastersModule,
+    AdminUserModule,
   ],
   controllers: [AppController],
   providers: [

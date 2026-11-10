@@ -31,6 +31,9 @@ const MODULES = [
   'marketing',
   'reports',
   'masters',
+  // Admin accounts, roles and permissions. Super Admin only by default —
+  // creating an admin is creating a way into every customer record.
+  'admins',
 ] as const;
 
 const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'export'] as const;

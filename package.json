@@ -23,7 +23,11 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "smoke:customer": "node test/smoke-customer.mjs"
+    "smoke:customer": "node test/smoke-customer.mjs",
+    "smoke:instructor": "node -r dotenv/config test/smoke-instructor.mjs",
+    "smoke:payout": "node -r dotenv/config test/smoke-payout.mjs",
+    "smoke:notification": "node -r dotenv/config test/smoke-notification.mjs",
+    "smoke:masters": "node -r dotenv/config test/smoke-masters.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

@@ -66,6 +66,43 @@ export class EnvVars {
   @IsOptional()
   @IsString()
   RAZORPAY_WEBHOOK_SECRET?: string;
+
+  // File storage. The local-disk stand-in writes KYC documents under this
+  // directory in development; StorageModule refuses to boot into it in
+  // production, where a private S3-compatible bucket is required.
+  @IsOptional()
+  @IsString()
+  STORAGE_ROOT?: string;
+
+  /**
+   * Origin the signed download URLs are built on, e.g.
+   * `https://api.hellofit.in`. Empty in development, which yields a relative
+   * URL the app resolves against its own base.
+   */
+  @IsOptional()
+  @IsString()
+  PUBLIC_BASE_URL?: string;
+
+  // Firebase Cloud Messaging (push). All three come from a service-account
+  // JSON key. Optional in development: NotificationModule falls back to a
+  // logging stand-in, and refuses to boot in production without them —
+  // notifications written to a log instead of delivered is a failure nobody
+  // notices for a week.
+  @IsOptional()
+  @IsString()
+  FIREBASE_PROJECT_ID?: string;
+
+  @IsOptional()
+  @IsString()
+  FIREBASE_CLIENT_EMAIL?: string;
+
+  /**
+   * The `private_key` field of the service-account JSON. Pasted into `.env` it
+   * arrives with literal `\n` sequences, which `FcmPushSender` unescapes.
+   */
+  @IsOptional()
+  @IsString()
+  FIREBASE_PRIVATE_KEY?: string;
 }
 
 export function validateEnv(raw: Record<string, unknown>): EnvVars {

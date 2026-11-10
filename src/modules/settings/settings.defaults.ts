@@ -103,6 +103,33 @@ export interface CustomerPolicy {
   maxAddresses: number;
 }
 
+/**
+ * Teacher onboarding and KYC (spec 3.6). Which documents an applicant must
+ * produce is a client policy decision — section 12 leaves "empanelled or
+ * salaried" open, and a salaried model would drop the PAN and bank
+ * requirements — so the list is configurable, never a constant in the code.
+ */
+export interface OnboardingPolicy {
+  /** Must be uploaded before the applicant can submit for review. */
+  requiredDocuments: string[];
+  /**
+   * Must be `VERIFIED` before the applicant can reach `APPROVED`. A subset of
+   * `requiredDocuments`: a yoga certificate is checked by a human, a photo is
+   * not worth blocking approval on.
+   */
+  verificationRequired: string[];
+  /** Pipeline steps that may be skipped — ops reality, not every hire demos. */
+  screeningCallRequired: boolean;
+  demoSessionRequired: boolean;
+  /** Rejected by the upload endpoint, before anything is written. */
+  maxFileSizeMb: number;
+  allowedMimeTypes: string[];
+  /** Lead time on the document-expiry reminder job. */
+  expiryReminderDays: number;
+  /** Signed download URLs for KYC files live this long (spec 10.1). */
+  signedUrlTtlMinutes: number;
+}
+
 export interface HelloFitSettings {
   refundSlabs: RefundSlabs;
   reschedulePolicy: ReschedulePolicy;
@@ -112,6 +139,7 @@ export interface HelloFitSettings {
   payout: PayoutPolicy;
   review: ReviewPolicy;
   customer: CustomerPolicy;
+  onboarding: OnboardingPolicy;
 }
 
 /**
@@ -182,6 +210,38 @@ export const DEFAULT_SETTINGS: HelloFitSettings = {
   },
   customer: {
     maxAddresses: 10,
+  },
+  onboarding: {
+    // Working assumption: empanelled teachers, so PAN and bank details are
+    // needed to pay them and police verification is needed to send them into
+    // a customer's home. Confirm with the client (spec section 12).
+    requiredDocuments: [
+      'ID_PROOF',
+      'ADDRESS_PROOF',
+      'PAN',
+      'BANK_DETAILS',
+      'YOGA_CERTIFICATION',
+      'POLICE_VERIFICATION',
+      'PHOTO',
+    ],
+    verificationRequired: [
+      'ID_PROOF',
+      'PAN',
+      'BANK_DETAILS',
+      'YOGA_CERTIFICATION',
+      'POLICE_VERIFICATION',
+    ],
+    screeningCallRequired: true,
+    demoSessionRequired: true,
+    maxFileSizeMb: 10,
+    allowedMimeTypes: [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'application/pdf',
+    ],
+    expiryReminderDays: 30,
+    signedUrlTtlMinutes: 15,
   },
 };
 

@@ -65,3 +65,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # reproducible.
 .agents/
 .windsurf/
+
+# Local-disk file store. KYC documents land here in development — identity
+# proofs, PAN cards, bank details. Never commit them. In production these live
+# in a private S3 bucket and this directory does not exist.
+/storage

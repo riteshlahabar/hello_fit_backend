@@ -137,6 +137,9 @@ model User {
   devices           Device[]
   otpRequests       OtpRequest[]
   refreshTokens     RefreshToken[]
+  notificationOutbox      NotificationOutbox[]
+  inAppNotifications      InAppNotification[]
+  notificationPreferences NotificationPreference[]
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -410,6 +413,8 @@ model AdminUser {
   auditLogs         AuditLog[]
   managedBranches   Branch[]       @relation("BranchManager")
   refreshTokens     RefreshToken[]
+  notificationOutbox NotificationOutbox[]
+  inAppNotifications InAppNotification[]
 
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
@@ -1684,4 +1689,186 @@ model TrustEvent {
 
   @@index([customerId, createdAt])
   @@map("trust_events")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (spec 9) — Phase 2/3/4 all depend on this.
+//
+// Four tables, each earning its place:
+//
+// - `NotificationTemplate` so ops can edit copy without a deploy (the spec
+//   calls the matrix "template driven, admin-editable").
+// - `NotificationOutbox` because a send is an external call that fails. A row
+//   written in the same breath as the domain change, then delivered by a cron,
+//   survives a restart and is auditable — the same Postgres-deadline pattern
+//   every other timed behaviour here uses instead of BullMQ.
+// - `InAppNotification` because the matrix lists "in-app" as a channel of its
+//   own: a bell icon with unread counts, which push cannot provide.
+// - `NotificationPreference` for the per-user, per-channel opt-outs the app
+//   settings screen needs.
+// ---------------------------------------------------------------------------
+
+enum NotificationChannel {
+  PUSH
+  SMS
+  EMAIL
+  IN_APP
+}
+
+enum NotificationAudience {
+  CUSTOMER
+  INSTRUCTOR
+  ADMIN
+}
+
+/// Delivery lifecycle of one outbox row.
+enum NotificationStatus {
+  /// Waiting for the dispatch cron.
+  QUEUED
+  /// Handed to the provider and accepted.
+  SENT
+  /// Provider rejected it, or every device token was dead. Terminal.
+  FAILED
+  /// Suppressed by a user preference or a quiet-hours window. Terminal.
+  SUPPRESSED
+}
+
+/// Admin-editable copy, one row per (event, channel, audience, locale).
+///
+/// `title` and `body` carry `{{placeholders}}` filled from the outbox row's
+/// `data`. Rendering is a pure function so a template that references a
+/// variable nobody supplies is caught by a test, not by a customer.
+model NotificationTemplate {
+  id          String               @id @default(uuid()) @db.Uuid
+  /// Event key from the spec 9 matrix, e.g. `booking.confirmed`.
+  eventKey    String               @map("event_key") @db.VarChar(80)
+  channel     NotificationChannel
+  audience    NotificationAudience
+  /// BCP-47-ish language tag. `en` is the fallback when a locale is missing.
+  locale      String               @default("en") @db.VarChar(10)
+  title       String?              @db.VarChar(200)
+  body        String               @db.Text
+  /// Route the push deep-links to, e.g. `/bookings/{{bookingId}}`.
+  deepLink    String?              @map("deep_link") @db.Text
+  /// Provider template id, for SMS rails that require pre-registered copy
+  /// (India's DLT regime does).
+  providerRef String?              @map("provider_ref") @db.VarChar(120)
+  isActive    Boolean              @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  outbox NotificationOutbox[]
+
+  @@unique([eventKey, channel, audience, locale])
+  @@index([eventKey])
+  @@map("notification_templates")
+}
+
+/// One queued delivery. Written inside the domain transaction, sent later.
+model NotificationOutbox {
+  id         String               @id @default(uuid()) @db.Uuid
+  eventKey   String               @map("event_key") @db.VarChar(80)
+  channel    NotificationChannel
+  audience   NotificationAudience
+  /// Recipient, when the audience is CUSTOMER or INSTRUCTOR.
+  ///
+  /// Exactly one of `userId` or `adminUserId` is set. Two nullable foreign keys
+  /// rather than one polymorphic column, the same shape `RefreshToken` uses —
+  /// because `AdminUser` is a standalone table with no `User` row and no
+  /// `UserRole.ADMIN` exists, so an admin recipient cannot be a `userId`.
+  userId     String?              @map("user_id") @db.Uuid
+  /// Recipient when the audience is ADMIN.
+  adminUserId String?             @map("admin_user_id") @db.Uuid
+  templateId String?              @map("template_id") @db.Uuid
+  /// Rendered at enqueue time, not at send time: the copy a customer received
+  /// must not change because ops edited the template afterwards.
+  title      String?              @db.VarChar(200)
+  body       String               @db.Text
+  deepLink   String?              @map("deep_link") @db.Text
+  /// Placeholder values, kept for debugging and for re-render on retry.
+  data       Json?
+  /// SMS destination or email address, resolved at enqueue time.
+  destination String?             @map("destination") @db.VarChar(255)
+  status     NotificationStatus   @default(QUEUED)
+  attempts   Int                  @default(0)
+  /// Next delivery attempt. The dispatch cron selects on this.
+  nextAttemptAt DateTime          @default(now()) @map("next_attempt_at")
+  sentAt     DateTime?            @map("sent_at")
+  /// Provider message id, so a delivery report can be matched back.
+  providerMessageId String?       @map("provider_message_id") @db.VarChar(200)
+  lastError  String?              @map("last_error") @db.Text
+  /// Set when a preference or quiet-hours rule suppressed it.
+  suppressedReason String?        @map("suppressed_reason") @db.VarChar(200)
+
+  user      User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adminUser AdminUser?            @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  template  NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // The dispatch cron's query: everything due, oldest first.
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
+  @@index([eventKey])
+  @@map("notification_outbox")
+}
+
+/// The bell icon: read/unread, per user, independent of push delivery.
+model InAppNotification {
+  id       String               @id @default(uuid()) @db.Uuid
+  /// Exactly one of `userId` or `adminUserId` is set — see the note on
+  /// `NotificationOutbox`. Admins have no `User` row.
+  userId   String?              @map("user_id") @db.Uuid
+  adminUserId String?           @map("admin_user_id") @db.Uuid
+  eventKey String               @map("event_key") @db.VarChar(80)
+  audience NotificationAudience
+  title    String               @db.VarChar(200)
+  body     String               @db.Text
+  deepLink String?              @map("deep_link") @db.Text
+  data     Json?
+  readAt   DateTime?            @map("read_at")
+
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Drives the unread badge and the paginated list, for each recipient kind.
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([adminUserId, readAt])
+  @@map("in_app_notifications")
+}
+
+/// Per-user channel opt-outs. A missing row means "send everything", so a new
+/// user needs no seeding and an opt-out is an explicit, auditable act.
+///
+/// Transactional events ignore this — a customer cannot opt out of being told
+/// their teacher is at the door. Only the channels the spec marks promotional
+/// are suppressible, which `notification/events.ts` decides.
+model NotificationPreference {
+  id      String              @id @default(uuid()) @db.Uuid
+  userId  String              @map("user_id") @db.Uuid
+  channel NotificationChannel
+  /// `*` means "every event on this channel"; otherwise one event key.
+  ///
+  /// A sentinel rather than NULL, deliberately: Postgres treats NULLs as
+  /// distinct in a unique index, so `@@unique([userId, channel, eventKey])`
+  /// would not actually stop two "whole channel" rows from existing. It would
+  /// also force the compound-unique `where` to be non-nullable in Prisma while
+  /// the column was nullable, which is how this was caught.
+  eventKey String              @default("*") @map("event_key") @db.VarChar(80)
+  enabled Boolean             @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, channel, eventKey])
+  @@map("notification_preferences")
 }
