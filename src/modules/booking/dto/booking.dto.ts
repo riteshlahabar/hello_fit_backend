@@ -8,8 +8,10 @@ import {
   IsNumber,
   IsObject,
   IsOptional,
+  IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -47,9 +49,18 @@ export class QuoteBookingDto {
   distanceKm?: number;
 
   /**
-   * Coupon or membership discount. Server-side validation of the coupon comes
-   * with the coupon module; until then this is advisory and still capped by
-   * the pricing calculator.
+   * A promotional code (PDF 6.9). When present the server validates it and
+   * computes the discount itself, ignoring `discount` below — the figure the
+   * customer is charged is never one the client sent.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  couponCode?: string;
+
+  /**
+   * Membership or manually agreed discount, in rupees. Capped by the pricing
+   * calculator. Superseded by `couponCode` when both are sent.
    */
   @IsOptional()
   @IsNumber()

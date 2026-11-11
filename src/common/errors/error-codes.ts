@@ -76,6 +76,16 @@ export const ErrorCode = {
   /** The last active default (e.g. the default language) cannot be cleared. */
   MASTER_DEFAULT_REQUIRED: 'MASTER_DEFAULT_REQUIRED',
 
+  // Coupons (PDF 6.9)
+  /** No such code, or the code is inactive, soft-deleted or outside its dates. */
+  COUPON_INVALID: 'COUPON_INVALID',
+  /** The code is real and live but the charge is under `minBookingAmount`. */
+  COUPON_MIN_NOT_MET: 'COUPON_MIN_NOT_MET',
+  /** The total or per-customer redemption limit is used up. */
+  COUPON_LIMIT_REACHED: 'COUPON_LIMIT_REACHED',
+  /** The code has been redeemed, so the code string itself is now frozen. */
+  COUPON_ALREADY_REDEEMED: 'COUPON_ALREADY_REDEEMED',
+
   // Admin users, roles and permissions
   /** An admin cannot suspend, delete or demote their own account. */
   ADMIN_SELF_ACTION: 'ADMIN_SELF_ACTION',

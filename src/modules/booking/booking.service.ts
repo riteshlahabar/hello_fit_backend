@@ -13,6 +13,10 @@ import { ErrorCode } from '../../common/errors/error-codes';
 import { AssignmentService } from '../assignment/assignment.service';
 import { AvailabilityService } from '../availability/availability.service';
 import {
+  CouponService,
+  type CouponApplication,
+} from '../coupon/coupon.service';
+import {
   addCalendarDays,
   calendarWeekday,
   parseCalendarDate,
@@ -47,7 +51,37 @@ export class BookingService {
     private readonly settings: SettingsService,
     private readonly availability: AvailabilityService,
     private readonly assignment: AssignmentService,
+    private readonly coupons: CouponService,
   ) {}
+
+  /**
+   * Resolves `couponCode` into a rupee discount (PDF 6.9).
+   *
+   * The coupon is checked against the **service value plus add-ons, before
+   * travel** — travel is a cost passed through to the teacher, not margin to
+   * discount, and `minBookingAmount` reads as a floor on what was booked
+   * rather than on how far the teacher had to ride.
+   *
+   * Returns the client's advisory `discount` untouched when no code was sent,
+   * so a membership discount still works.
+   */
+  private async resolveDiscount(
+    customerId: string,
+    dto: QuoteBookingDto,
+    base: number,
+  ): Promise<{ discount?: number; applied: CouponApplication | null }> {
+    if (!dto.couponCode) {
+      return { discount: dto.discount, applied: null };
+    }
+
+    const applied = await this.coupons.validate(
+      customerId,
+      dto.couponCode,
+      base,
+    );
+
+    return { discount: applied.discount, applied };
+  }
 
   /**
    * Price breakup shown before payment (spec 3.1 step 9). Pure read — creates
@@ -56,7 +90,13 @@ export class BookingService {
   async quote(
     customerId: string,
     dto: QuoteBookingDto,
-  ): Promise<QuoteBreakup & { sessionCount: number; currency: string }> {
+  ): Promise<
+    QuoteBreakup & {
+      sessionCount: number;
+      currency: string;
+      coupon: { code: string; discount: number } | null;
+    }
+  > {
     const payment = this.settings.get('payment');
     const { service, pkg, addons } = await this.loadPricingInputs(dto);
 
@@ -68,19 +108,46 @@ export class BookingService {
       ? Number(pkg.price) / pkg.sessionCount
       : Number(service.basePrice);
 
+    // Priced once with no discount, to get the base the coupon applies to;
+    // then again with the discount the server computed from it.
+    const undiscounted = computeQuote(
+      {
+        unitPrice,
+        sessionCount,
+        addons,
+        distanceKm: dto.distanceKm,
+        walletApplied: dto.walletApplied,
+      },
+      payment,
+    );
+
+    const { discount, applied } = await this.resolveDiscount(
+      customerId,
+      dto,
+      undiscounted.grossAmount + undiscounted.addonAmount,
+    );
+
     const breakup = computeQuote(
       {
         unitPrice,
         sessionCount,
         addons,
         distanceKm: dto.distanceKm,
-        discount: dto.discount,
+        discount,
         walletApplied: dto.walletApplied,
       },
       payment,
     );
 
-    return { ...breakup, sessionCount, currency: 'INR' };
+    return {
+      ...breakup,
+      sessionCount,
+      currency: 'INR',
+      // US-A09: the applicable discount, displayed before payment.
+      coupon: applied
+        ? { code: applied.code, discount: applied.discount }
+        : null,
+    };
   }
 
   /**
@@ -122,13 +189,32 @@ export class BookingService {
       ? Number(pkg.price) / pkg.sessionCount
       : Number(service.basePrice);
 
+    const undiscounted = computeQuote(
+      {
+        unitPrice,
+        sessionCount,
+        addons,
+        distanceKm: dto.distanceKm,
+        walletApplied: dto.walletApplied,
+      },
+      payment,
+    );
+
+    // The coupon is re-validated here, not trusted from the quote the app
+    // showed: it may have expired or run out since.
+    const { discount, applied } = await this.resolveDiscount(
+      customerId,
+      dto,
+      undiscounted.grossAmount + undiscounted.addonAmount,
+    );
+
     const breakup = computeQuote(
       {
         unitPrice,
         sessionCount,
         addons,
         distanceKm: dto.distanceKm,
-        discount: dto.discount,
+        discount,
         walletApplied: dto.walletApplied,
       },
       payment,
@@ -189,6 +275,7 @@ export class BookingService {
           payable: breakup.payable,
           paymentStatus: 'UNPAID',
           source: 'APP_CUSTOMER',
+          couponId: applied?.couponId,
           // Cast because Prisma's Json input type does not accept an open
           // Record; the DTO has already validated this is a plain object.
           preferences: (dto.preferences ?? undefined) as
@@ -221,6 +308,13 @@ export class BookingService {
         where: { bookingId: created.id },
         orderBy: { sequence: 'asc' },
       });
+
+      // Inside the transaction, and conditional on the cap: two customers
+      // racing for the last redemption cannot both win, and a lost race
+      // rolls the whole booking back rather than discounting for free.
+      if (applied) {
+        await this.coupons.redeem(tx, applied.couponId, applied.usageLimit);
+      }
 
       if (dto.addonIds?.length) {
         await tx.bookingAddon.createMany({
@@ -576,6 +670,13 @@ export class BookingService {
         where: { id: booking.id },
         data: { cancelReason: reason },
       });
+
+      // The redemption goes back only when the *whole* booking is cancelled
+      // (PDF 6.9). A booking with a session already delivered has had the
+      // benefit of the coupon, so cancelling the rest does not refund the use.
+      if (booking.couponId && cancellable.length === booking.sessions.length) {
+        await this.coupons.release(tx, booking.couponId);
+      }
     });
 
     this.logger.log(

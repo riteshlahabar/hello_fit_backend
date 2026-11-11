@@ -957,11 +957,15 @@ model Booking {
   holdExpiresAt DateTime?     @map("hold_expires_at")
   createdById   String?       @map("created_by_id") @db.Uuid
   cancelReason  String?       @map("cancel_reason") @db.Text
+  /// The coupon redeemed on this booking, if any (PDF 6.9). Kept so a
+  /// cancellation can give the redemption back to the right code.
+  couponId      String?       @map("coupon_id") @db.Uuid
 
   customer CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Restrict)
   service  Service         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   package  Package?        @relation(fields: [packageId], references: [id], onDelete: SetNull)
   address  Address         @relation(fields: [addressId], references: [id], onDelete: Restrict)
+  coupon   Coupon?         @relation(fields: [couponId], references: [id], onDelete: SetNull)
 
   sessions      BookingSession[]
   addons        BookingAddon[]
@@ -978,7 +982,59 @@ model Booking {
   @@index([customerId])
   @@index([paymentStatus])
   @@index([holdExpiresAt])
+  @@index([couponId])
   @@map("bookings")
+}
+
+// ---------------------------------------------------------------------------
+// Coupons and promotional settings (PDF 6.9)
+// ---------------------------------------------------------------------------
+
+enum DiscountType {
+  PERCENT
+  FLAT
+}
+
+/// A promotional code the customer types at checkout.
+///
+/// PDF 6.9 asks for the code, the discount parameters, the validity rules and
+/// an active flag — so that is all this table holds. No service, city or
+/// first-booking restriction: the PDF does not ask for one and inventing it
+/// would be inventing scope.
+///
+/// `usedCount` is maintained by the booking transaction rather than counted
+/// over `bookings`, because a cancellation gives the redemption back and a
+/// live count would keep charging the customer for it.
+model Coupon {
+  id               String       @id @default(uuid()) @db.Uuid
+  code             String       @unique @db.VarChar(32)
+  description      String?      @db.VarChar(200)
+  discountType     DiscountType @map("discount_type")
+  /// Percent (1-100) or rupees off, per `discountType`.
+  discountValue    Decimal      @map("discount_value") @db.Decimal(10, 2)
+  /// Ceiling on a PERCENT discount. Null means uncapped.
+  maxDiscount      Decimal?     @map("max_discount") @db.Decimal(10, 2)
+  /// The charge must reach this before the code applies.
+  minBookingAmount Decimal      @default(0) @map("min_booking_amount") @db.Decimal(10, 2)
+  /// Calendar days, inclusive at both ends — see common/dates/calendar.
+  validFrom        DateTime     @map("valid_from") @db.Date
+  validTo          DateTime     @map("valid_to") @db.Date
+  /// Redemptions allowed across all customers. Null means unlimited.
+  usageLimit       Int?         @map("usage_limit")
+  /// Redemptions allowed per customer. Null means unlimited.
+  perCustomerLimit Int?         @map("per_customer_limit")
+  usedCount        Int          @default(0) @map("used_count")
+  isActive         Boolean      @default(true) @map("is_active")
+
+  bookings Booking[]
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([isActive])
+  @@index([validFrom, validTo])
+  @@map("coupons")
 }
 
 model BookingAddon {
