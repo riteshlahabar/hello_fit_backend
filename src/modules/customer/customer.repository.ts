@@ -30,10 +30,33 @@ export class CustomerRepository {
 
   // ----------------------------------------------------------------- profile
 
+  /**
+   * The profile plus the account identifiers that live on `User` — the
+   * website's profile page shows the mobile and email alongside the name, and
+   * they are on the other table.
+   */
   findProfileByUserId(userId: string) {
     return this.prisma.customerProfile.findFirst({
       where: { userId, deletedAt: null },
+      include: { user: { select: { mobile: true, email: true } } },
     });
+  }
+
+  /** The email lives on `User`, so changing it is a second write. */
+  updateUserEmail(userId: string, email: string | null) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { email },
+      select: { mobile: true, email: true },
+    });
+  }
+
+  /** Is this email already on another account? `User.email` is unique. */
+  async emailTaken(userId: string, email: string) {
+    const count = await this.prisma.user.count({
+      where: { email, id: { not: userId }, deletedAt: null },
+    });
+    return count > 0;
   }
 
   findProfileByReferralCode(referralCode: string) {

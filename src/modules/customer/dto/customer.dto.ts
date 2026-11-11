@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsEmail,
   IsEnum,
   IsISO8601,
   IsLatitude,
@@ -31,6 +32,17 @@ export class UpdateCustomerProfileDto {
   @IsOptional()
   @IsEnum(Gender)
   gender?: Gender;
+
+  /**
+   * Contact email. PDF §3.2 asks for "update name and contact information";
+   * it lives on `User`, not on the profile, and is unique across accounts.
+   * The mobile is not editable here — it is the login identity, changed only
+   * by verifying a new one.
+   */
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(255)
+  email?: string;
 
   /** Calendar date (YYYY-MM-DD). Stored on a @db.Date column. */
   @IsOptional()

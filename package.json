@@ -36,6 +36,14 @@
     "smoke:admin-earnings": "node -r dotenv/config test/smoke-admin-earnings.mjs",
     "smoke:admin-dashboard": "node -r dotenv/config test/smoke-admin-dashboard.mjs",
     "smoke:admin-coupons": "node -r dotenv/config test/smoke-admin-coupons.mjs",
+    "otp:clear": "node -r dotenv/config test/clear-otp-window.mjs",
+    "smoke:web-bookings": "node -r dotenv/config test/smoke-web-bookings.mjs",
+    "smoke:web-login": "node -r dotenv/config test/smoke-web-login.mjs",
+    "smoke:web-profile": "node -r dotenv/config test/smoke-web-profile.mjs",
+    "smoke:web-notifications": "node -r dotenv/config test/smoke-web-notifications.mjs",
+    "smoke:web-reviews": "node -r dotenv/config test/smoke-web-reviews.mjs",
+    "smoke:web-checkout": "node -r dotenv/config test/smoke-web-checkout.mjs",
+    "smoke:web-pages": "node -r dotenv/config test/smoke-web-pages.mjs",
     "smoke:admin-reports": "node -r dotenv/config test/smoke-admin-reports.mjs"
   },
   "dependencies": {

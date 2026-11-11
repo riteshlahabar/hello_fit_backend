@@ -4,6 +4,7 @@ import {
   ArrayUnique,
   IsArray,
   IsDateString,
+  IsIn,
   IsInt,
   IsNumber,
   IsObject,
@@ -113,6 +114,20 @@ export class CreateBookingDto extends QuoteBookingDto {
   @IsOptional()
   @IsObject()
   preferences?: Record<string, unknown>;
+
+  /**
+   * Which surface the customer booked from. `BookingSource` has had a
+   * `WEBSITE` value since the first migration and nothing ever set it, so
+   * every booking read as `APP_CUSTOMER` — including the ones the website now
+   * makes, which would misreport the channel on the admin bookings screen and
+   * in 6.12's reports.
+   *
+   * `ADMIN` is deliberately not accepted: a customer token must not be able
+   * to claim a booking was made by ops.
+   */
+  @IsOptional()
+  @IsIn(['APP_CUSTOMER', 'WEBSITE'])
+  source?: 'APP_CUSTOMER' | 'WEBSITE';
 }
 
 export class FindSlotsDto {
@@ -128,4 +143,18 @@ export class FindSlotsDto {
   @IsOptional()
   @IsUUID()
   instructorId?: string;
+}
+
+/**
+ * The only filter on the customer's own booking list.
+ *
+ * A DTO rather than a bare `@Query('status')` string: an unvalidated value
+ * reached `listForCustomer` and fell through its switch to `{}`, which made
+ * `sessions: { some: {} }` — "any booking that has a session". A typo in the
+ * client silently became a different query instead of an error.
+ */
+export class ListMyBookingsQueryDto {
+  @IsOptional()
+  @IsIn(['upcoming', 'completed', 'cancelled'])
+  status?: 'upcoming' | 'completed' | 'cancelled';
 }

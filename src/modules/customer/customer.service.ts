@@ -89,7 +89,20 @@ export class CustomerService {
       referredById = await this.resolveReferrer(dto.referredByCode);
     }
 
-    return this.repo.updateProfile(profile.id, {
+    // The email is on `User`, so it is a second write and its own refusal.
+    // Checked before the profile write rather than after, so a taken email
+    // does not leave half the form saved.
+    if (dto.email !== undefined && dto.email !== profile.user.email) {
+      if (await this.repo.emailTaken(userId, dto.email)) {
+        throw new ConflictException({
+          code: ErrorCode.DUPLICATE_RESOURCE,
+          message: 'That email is already used by another account',
+        });
+      }
+      await this.repo.updateUserEmail(userId, dto.email);
+    }
+
+    await this.repo.updateProfile(profile.id, {
       ...(dto.name !== undefined && { name: dto.name }),
       ...(dto.gender !== undefined && { gender: dto.gender }),
       ...(dto.dob !== undefined && { dob: parseCalendarDate(dto.dob) }),
@@ -97,6 +110,11 @@ export class CustomerService {
       ...(dto.healthNotes !== undefined && { healthNotes: dto.healthNotes }),
       ...(referredById && { referredBy: { connect: { id: referredById } } }),
     });
+
+    // Re-read rather than returning the update: the response then carries the
+    // same shape as GET /profile — `user` and `isComplete` included — so the
+    // client can use it to repaint the form.
+    return this.getProfile(userId);
   }
 
   /** A referral code that doesn't resolve is a typo, not a server error. */

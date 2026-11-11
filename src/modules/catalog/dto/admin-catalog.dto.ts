@@ -62,6 +62,18 @@ export class CreateCategoryDto {
   @MaxLength(120)
   icon?: string;
 
+
+  /**
+   * Card image for the category, shown on the website home grid. A URL
+   * rather than an upload: the supplied design uses hosted images, and the
+   * public GET /categories has always returned this column — it simply had
+   * no way in. Client instruction, 11 Nov 2026.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  imageUrl?: string;
+
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -90,6 +102,18 @@ export class UpdateCategoryDto {
   @IsString()
   @MaxLength(120)
   icon?: string;
+
+
+  /**
+   * Card image for the category, shown on the website home grid. A URL
+   * rather than an upload: the supplied design uses hosted images, and the
+   * public GET /categories has always returned this column — it simply had
+   * no way in. Client instruction, 11 Nov 2026.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  imageUrl?: string;
 
   @IsOptional()
   @IsInt()

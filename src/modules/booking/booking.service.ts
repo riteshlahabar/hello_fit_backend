@@ -274,7 +274,7 @@ export class BookingService {
           walletApplied: breakup.walletApplied,
           payable: breakup.payable,
           paymentStatus: 'UNPAID',
-          source: 'APP_CUSTOMER',
+          source: dto.source ?? 'APP_CUSTOMER',
           couponId: applied?.couponId,
           // Cast because Prisma's Json input type does not accept an open
           // Record; the DTO has already validated this is a plain object.
@@ -486,6 +486,10 @@ export class BookingService {
         paymentStatus: true,
         createdAt: true,
         service: { select: { id: true, name: true, durationMin: true } },
+        // The customer's own list shows who the session is with and where —
+        // the detail route already selected both; the list did not, which
+        // left "My Bookings" unable to name the provider without an N+1.
+        address: { select: { label: true, city: { select: { name: true } } } },
         sessions: {
           orderBy: { sequence: 'asc' },
           select: {
@@ -495,6 +499,7 @@ export class BookingService {
             fromMinute: true,
             toMinute: true,
             status: true,
+            instructor: { select: { id: true, name: true } },
           },
         },
       },

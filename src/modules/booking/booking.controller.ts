@@ -22,6 +22,7 @@ import {
 import {
   CreateBookingDto,
   FindSlotsDto,
+  ListMyBookingsQueryDto,
   QuoteBookingDto,
 } from './dto/booking.dto';
 
@@ -84,10 +85,10 @@ export class BookingController {
   @Get('bookings')
   async list(
     @CurrentUser('id') userId: string,
-    @Query('status') status?: 'upcoming' | 'completed' | 'cancelled',
+    @Query() query: ListMyBookingsQueryDto,
   ) {
     const customerId = await this.resolveCustomerId(userId);
-    const bookings = await this.booking.listForCustomer(customerId, { status });
+    const bookings = await this.booking.listForCustomer(customerId, query);
 
     return { data: bookings, meta: { count: bookings.length } };
   }
