@@ -22,6 +22,7 @@ import {
   trustDeltaFor,
 } from './review.calculator';
 import type { SubmitReviewDto } from './dto/review.dto';
+import type { ListReviewsQueryDto } from './dto/admin-review.dto';
 
 type Tx = Prisma.TransactionClient;
 
@@ -578,6 +579,107 @@ export class ReviewService {
   }
 
   // --- moderation ----------------------------------------------------------
+
+  /**
+   * The review table (PDF 6.10 — "view customer reviews", "view associated
+   * provider and booking information").
+   *
+   * **Both directions** — client instruction, 10 Nov 2026: the customer's
+   * review of the provider, and the provider's internal review of the
+   * customer. The second carries `confidentialNote`, which **the customer must
+   * never see**; it is returned here because this route is admin-only
+   * (`@AllowAudience('admin')` + `reviews:view`) and the client asked for it.
+   * It must never be copied onto a customer-facing response.
+   *
+   * Author and subject are polymorphic ids (`authorId` is a CustomerProfile,
+   * `subjectId` an InstructorProfile, per `direction`), so there is no Prisma
+   * relation to include — the names are resolved in a second pass rather than
+   * by joining, which is why this is not one query.
+   */
+  async listForAdmin(query: ListReviewsQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const where: Prisma.ReviewWhereInput = {
+      deletedAt: null,
+      // The two admin screens are this filter. Without it the internal
+      // instructor-to-customer review, and its confidential note, would
+      // surface on the customer-review screen.
+      ...(query.direction && { direction: query.direction }),
+      ...(query.state && { state: query.state }),
+      ...(query.rating && { overallRating: query.rating }),
+      ...(query.q && {
+        booking: { code: { contains: query.q, mode: 'insensitive' } },
+      }),
+    };
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.review.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          authorType: true,
+          authorId: true,
+          subjectType: true,
+          subjectId: true,
+          direction: true,
+          overallRating: true,
+          // Admin-only. Never put this on a customer-facing response.
+          confidentialNote: true,
+          comment: true,
+          tags: true,
+          state: true,
+          flagReason: true,
+          hiddenReason: true,
+          reply: true,
+          publishedAt: true,
+          createdAt: true,
+          booking: { select: { id: true, code: true } },
+          session: { select: { id: true, sessionDate: true } },
+          reports: {
+            where: { state: 'OPEN' },
+            select: { id: true, reason: true },
+          },
+        },
+      }),
+      this.prisma.review.count({ where }),
+    ]);
+
+    // Author and subject swap sides with the direction, so every id is looked
+    // up in both tables rather than assuming which one it belongs to.
+    const ids = rows.flatMap((r) => [r.authorId, r.subjectId]);
+    const [customers, instructors] = await Promise.all([
+      this.prisma.customerProfile.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true },
+      }),
+      this.prisma.instructorProfile.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    const customerById = new Map(customers.map((c) => [c.id, c.name]));
+    const instructorById = new Map(instructors.map((i) => [i.id, i.name]));
+
+    return {
+      rows: rows.map((r) => {
+        const customerId =
+          r.direction === 'CUSTOMER_TO_INSTRUCTOR' ? r.authorId : r.subjectId;
+        const instructorId =
+          r.direction === 'CUSTOMER_TO_INSTRUCTOR' ? r.subjectId : r.authorId;
+        return {
+          ...r,
+          customerName: customerById.get(customerId) ?? null,
+          instructorName: instructorById.get(instructorId) ?? null,
+        };
+      }),
+      meta: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) },
+    };
+  }
 
   async moderationQueue() {
     return this.prisma.review.findMany({

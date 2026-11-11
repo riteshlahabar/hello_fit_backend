@@ -105,7 +105,23 @@ export class PayoutRepository {
               service: { select: { name: true } },
             },
           },
-          payoutItem: { select: { payoutId: true } },
+          // PDF 6.8 asks for "supported payout status information", so the
+          // batch's own status rides along — an earning's id alone does not
+          // say whether the money has actually moved.
+          payoutItem: {
+            select: {
+              payoutId: true,
+              payout: {
+                select: {
+                  id: true,
+                  status: true,
+                  cycleFrom: true,
+                  cycleTo: true,
+                  utr: true,
+                },
+              },
+            },
+          },
         },
       }),
       this.prisma.earning.count({ where }),

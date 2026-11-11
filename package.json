@@ -27,7 +27,13 @@
     "smoke:instructor": "node -r dotenv/config test/smoke-instructor.mjs",
     "smoke:payout": "node -r dotenv/config test/smoke-payout.mjs",
     "smoke:notification": "node -r dotenv/config test/smoke-notification.mjs",
-    "smoke:masters": "node -r dotenv/config test/smoke-masters.mjs"
+    "smoke:masters": "node -r dotenv/config test/smoke-masters.mjs",
+    "smoke:admin-customers": "node -r dotenv/config test/smoke-admin-customers.mjs",
+    "smoke:admin-bookings": "node -r dotenv/config test/smoke-admin-bookings.mjs",
+    "smoke:admin-catalog": "node -r dotenv/config test/smoke-admin-catalog.mjs",
+    "smoke:admin-reviews": "node -r dotenv/config test/smoke-admin-reviews.mjs",
+    "smoke:admin-payments": "node -r dotenv/config test/smoke-admin-payments.mjs",
+    "smoke:admin-earnings": "node -r dotenv/config test/smoke-admin-earnings.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

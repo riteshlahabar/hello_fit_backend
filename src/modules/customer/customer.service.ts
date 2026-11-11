@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { CustomerRepository } from './customer.repository';
 import { SettingsService } from '../settings/settings.service';
+import { AuditService } from '../audit/audit.service';
 import { ErrorCode } from '../../common/errors/error-codes';
 import { parseCalendarDate } from '../../common/dates/calendar';
 import { isValidReferralCode, normaliseReferralCode } from './referral';
@@ -14,6 +15,23 @@ import type {
   UpdateAddressDto,
   UpdateCustomerProfileDto,
 } from './dto/customer.dto';
+import type {
+  AdminUpdateCustomerDto,
+  BlockCustomerDto,
+  ChangeCustomerStatusDto,
+  ListCustomersQueryDto,
+} from './dto/admin-customer.dto';
+
+/**
+ * Context carried into the audit trail. The token subject on an admin route is
+ * the `AdminUser.id` — the same shape `InstructorService` uses, and for the
+ * same reason: `AdminUser` has no `userId` column to resolve.
+ */
+export interface AdminActor {
+  adminUserId: string;
+  ipAddress?: string;
+  requestId?: string;
+}
 
 /**
  * Customer profile and address rules.
@@ -28,6 +46,7 @@ export class CustomerService {
   constructor(
     private readonly repo: CustomerRepository,
     private readonly settings: SettingsService,
+    private readonly audit: AuditService,
   ) {}
 
   // ----------------------------------------------------------------- profile
@@ -217,6 +236,193 @@ export class CustomerService {
     }
 
     await this.repo.softDeleteAddress(profile.id, address.id, address.isDefault);
+  }
+
+  // ============================================================== admin side
+
+  async listForAdmin(query: ListCustomersQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const { rows, total } = await this.repo.listProfiles({
+      q: query.q,
+      status: query.status,
+      trustBand: query.trustBand,
+      isBlocked: query.isBlocked,
+      includeDeleted: query.includeDeleted,
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      rows,
+      meta: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) },
+    };
+  }
+
+  /** The customer file: profile, account, addresses and the wallet balance. */
+  async getForAdmin(customerId: string) {
+    const profile = await this.requireProfileById(customerId);
+    const wallet = await this.repo.walletBalance(profile.id);
+
+    return {
+      ...profile,
+      addresses: await this.repo.listAddresses(profile.id),
+      wallet: wallet ?? { balance: 0, updatedAt: null },
+    };
+  }
+
+  /**
+   * Ops correcting the profile on a support call. The health notes are the
+   * reason this exists: a customer who cannot get the app to save them leaves
+   * the teacher arriving without knowing about an injury.
+   */
+  async updateForAdmin(
+    customerId: string,
+    dto: AdminUpdateCustomerDto,
+    actor: AdminActor,
+  ) {
+    const profile = await this.requireProfileById(customerId);
+
+    const updated = await this.repo.updateProfile(profile.id, {
+      ...(dto.name !== undefined && { name: dto.name }),
+      ...(dto.gender !== undefined && { gender: dto.gender }),
+      // A date of birth is a calendar day, not an instant — parsing it as one
+      // shifts it by a day either side of UTC midnight.
+      ...(dto.dob !== undefined && { dob: parseCalendarDate(dto.dob) }),
+      ...(dto.goal !== undefined && { goal: dto.goal }),
+      ...(dto.healthNotes !== undefined && { healthNotes: dto.healthNotes }),
+    });
+
+    await this.audit.record({
+      adminUserId: actor.adminUserId,
+      action: 'customer.updated',
+      entityType: 'CustomerProfile',
+      entityId: profile.id,
+      before: {
+        name: profile.name,
+        gender: profile.gender,
+        goal: profile.goal,
+        healthNotes: profile.healthNotes,
+      },
+      after: {
+        name: updated.name,
+        gender: updated.gender,
+        goal: updated.goal,
+        healthNotes: updated.healthNotes,
+      },
+      ipAddress: actor.ipAddress,
+      requestId: actor.requestId,
+    });
+
+    return updated;
+  }
+
+  /**
+   * Suspends or reinstates the login. `DELETED` is refused here: removing a
+   * customer is a deletion-request workflow (spec 10.3) with its own retention
+   * rules, not a dropdown on the ops table.
+   */
+  async changeStatusForAdmin(
+    customerId: string,
+    dto: ChangeCustomerStatusDto,
+    actor: AdminActor,
+  ) {
+    const profile = await this.requireProfileById(customerId);
+
+    if (dto.status === 'DELETED') {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_FAILED,
+        message:
+          'Deleting a customer goes through the data-deletion request, not a status change',
+      });
+    }
+
+    const user = await this.repo.updateUserStatus(
+      profile.userId,
+      dto.status,
+      dto.reason,
+    );
+
+    // Suspended and still holding a valid refresh token is suspended in name
+    // only — the app would keep rotating it.
+    let revokedSessions = 0;
+    if (dto.status !== 'ACTIVE') {
+      const { count } = await this.repo.revokeRefreshTokens(profile.userId);
+      revokedSessions = count;
+    }
+
+    const upcomingSessions = await this.repo.countUpcomingSessionsForCustomer(
+      profile.id,
+    );
+
+    await this.audit.record({
+      adminUserId: actor.adminUserId,
+      action: 'customer.status_changed',
+      entityType: 'User',
+      entityId: profile.userId,
+      before: { status: profile.user.status },
+      after: { status: user.status },
+      reason: dto.reason,
+      ipAddress: actor.ipAddress,
+      requestId: actor.requestId,
+    });
+
+    return { ...profile, user, revokedSessions, upcomingSessions };
+  }
+
+  /**
+   * The blacklist (spec 4.6). Distinct from a suspension: the account still
+   * works, but `booking.create` refuses a blocked customer — which is why the
+   * response reports how many sessions are already on the calendar.
+   */
+  async setBlockedForAdmin(
+    customerId: string,
+    dto: BlockCustomerDto,
+    actor: AdminActor,
+  ) {
+    const profile = await this.requireProfileById(customerId);
+
+    if (dto.isBlocked && !dto.reason) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_FAILED,
+        message: 'A reason is required when blocking a customer',
+      });
+    }
+
+    const updated = await this.repo.updateProfile(profile.id, {
+      isBlocked: dto.isBlocked,
+      blockReason: dto.isBlocked ? (dto.reason ?? null) : null,
+    });
+
+    const upcomingSessions = await this.repo.countUpcomingSessionsForCustomer(
+      profile.id,
+    );
+
+    await this.audit.record({
+      adminUserId: actor.adminUserId,
+      action: dto.isBlocked ? 'customer.blocked' : 'customer.unblocked',
+      entityType: 'CustomerProfile',
+      entityId: profile.id,
+      before: { isBlocked: profile.isBlocked, blockReason: profile.blockReason },
+      after: { isBlocked: updated.isBlocked, blockReason: updated.blockReason },
+      reason: dto.reason,
+      ipAddress: actor.ipAddress,
+      requestId: actor.requestId,
+    });
+
+    return { ...updated, upcomingSessions };
+  }
+
+  private async requireProfileById(customerId: string) {
+    const profile = await this.repo.findProfileById(customerId);
+    if (!profile) {
+      throw new NotFoundException({
+        code: ErrorCode.NOT_FOUND,
+        message: 'Customer not found',
+      });
+    }
+    return profile;
   }
 
   /** Both are optional FKs; when supplied they must exist and agree. */

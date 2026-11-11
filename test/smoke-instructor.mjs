@@ -14,7 +14,9 @@
  * and deletes it again, so no credentials have to be shared — see
  * `admin-fixture.mjs`.
  */
-const BASE = 'http://localhost:3000/api/v1';
+// Overridable so the suite can run against a second build while a dev
+// server already holds 3000.
+const BASE = process.env.SMOKE_BASE_URL ?? 'http://localhost:3000/api/v1';
 const mobile = '9' + String(Date.now()).slice(-9);
 import { auditedActionCount, withTemporaryAdmin } from './admin-fixture.mjs';
 

@@ -1,4 +1,6 @@
 import { Logger, Module } from '@nestjs/common';
+import { AdminPaymentController } from './admin-payment.controller';
+import { AdminPaymentService } from './admin-payment.service';
 import { ConfigService } from '@nestjs/config';
 import { BookingModule } from '../booking/booking.module';
 import { WalletModule } from '../wallet/wallet.module';
@@ -50,8 +52,9 @@ const gatewayProvider = {
 
 @Module({
   imports: [BookingModule, WalletModule],
-  controllers: [PaymentController, WebhookController],
+  controllers: [AdminPaymentController, PaymentController, WebhookController],
   providers: [
+    AdminPaymentService,
     PaymentService,
     RefundService,
     InvoiceService,

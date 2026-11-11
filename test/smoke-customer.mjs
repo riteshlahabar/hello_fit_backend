@@ -6,7 +6,9 @@
  * saved address" entirely through the API. Before this module the address had
  * to be inserted by hand, which is why the test fixtures did exactly that.
  */
-const BASE = 'http://localhost:3000/api/v1';
+// Overridable so the suite can run against a second build while a dev
+// server already holds 3000.
+const BASE = process.env.SMOKE_BASE_URL ?? 'http://localhost:3000/api/v1';
 const mobile = '9' + String(Date.now()).slice(-9);
 
 let token = '';

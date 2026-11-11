@@ -21,7 +21,9 @@
  */
 import { withTemporaryAdmin } from './admin-fixture.mjs';
 
-const BASE = 'http://localhost:3000/api/v1';
+// Overridable so the suite can run against a second build while a dev
+// server already holds 3000.
+const BASE = process.env.SMOKE_BASE_URL ?? 'http://localhost:3000/api/v1';
 const STAMP = Date.now();
 
 let adminToken = '';

@@ -25,6 +25,18 @@ import {
   type QuoteBreakup,
 } from './pricing.calculator';
 import type { CreateBookingDto, QuoteBookingDto } from './dto/booking.dto';
+import type { ListBookingsQueryDto } from './dto/admin-booking.dto';
+import type { SessionStatus } from '../../generated/prisma/enums';
+
+/** Already finished or already cancelled — nothing left to cancel. */
+const TERMINAL_SESSION_STATUSES: readonly SessionStatus[] = [
+  'COMPLETED',
+  'CANCELLED_BY_CUSTOMER',
+  'CANCELLED_BY_TEACHER',
+  'CANCELLED_BY_ADMIN',
+  'NO_SHOW_CUSTOMER',
+  'NO_SHOW_TEACHER',
+];
 
 @Injectable()
 export class BookingService {
@@ -393,6 +405,189 @@ export class BookingService {
         },
       },
     });
+  }
+
+  // ============================================================== admin side
+
+  /**
+   * The admin booking table (PDF 6.6). `status` matches a booking with any
+   * session in that state — a package has many, and the operator is looking
+   * for the booking, not the occurrence.
+   */
+  async listForAdmin(query: ListBookingsQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const where: Prisma.BookingWhereInput = {
+      deletedAt: null,
+      ...(query.paymentStatus && { paymentStatus: query.paymentStatus }),
+      ...(query.status && { sessions: { some: { status: query.status } } }),
+      ...(query.q && {
+        OR: [
+          { code: { contains: query.q, mode: 'insensitive' } },
+          { customer: { name: { contains: query.q, mode: 'insensitive' } } },
+          { customer: { user: { mobile: { contains: query.q } } } },
+        ],
+      }),
+    };
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.booking.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          code: true,
+          type: true,
+          sessionCount: true,
+          payable: true,
+          paymentStatus: true,
+          createdAt: true,
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              user: { select: { mobile: true } },
+            },
+          },
+          service: { select: { id: true, name: true, durationMin: true } },
+          sessions: {
+            orderBy: { sequence: 'asc' },
+            select: {
+              id: true,
+              sequence: true,
+              sessionDate: true,
+              fromMinute: true,
+              toMinute: true,
+              status: true,
+              instructor: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.booking.count({ where }),
+    ]);
+
+    return {
+      rows,
+      meta: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) },
+    };
+  }
+
+  /**
+   * One booking's file, for support (PDF 6.6 — "access booking details for
+   * support purposes"). Carries the status history, which is the acceptance /
+   * rejection / cancellation record the same section asks for.
+   */
+  async getForAdmin(bookingId: string) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, deletedAt: null },
+      include: {
+        service: true,
+        address: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            user: { select: { mobile: true, email: true } },
+          },
+        },
+        sessions: {
+          orderBy: { sequence: 'asc' },
+          include: {
+            instructor: { select: { id: true, name: true, ratingAvg: true } },
+          },
+        },
+        addons: { include: { addon: { select: { name: true } } } },
+        statusHistory: { orderBy: { createdAt: 'desc' } },
+        payments: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+            method: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException({
+        code: ErrorCode.NOT_FOUND,
+        message: 'Booking not found',
+      });
+    }
+
+    return booking;
+  }
+
+  /**
+   * Admin cancellation (PDF 6.6, "permitted administrative status actions").
+   *
+   * Cancels every session that has not already run or been cancelled, and
+   * writes one `booking_status_history` row per session with the actor and the
+   * reason — 6.6 wants the cancellation *record*, not just the end state.
+   *
+   * It deliberately does **not** compute a refund. Refunds are their own
+   * module with their own policy slabs and their own audit; silently issuing
+   * one from a table action would hide money movement from finance.
+   */
+  async cancelForAdmin(
+    bookingId: string,
+    reason: string,
+    adminUserId: string,
+  ) {
+    const booking = await this.getForAdmin(bookingId);
+
+    const cancellable = booking.sessions.filter(
+      (s) => !TERMINAL_SESSION_STATUSES.includes(s.status),
+    );
+
+    if (cancellable.length === 0) {
+      throw new ConflictException({
+        code: ErrorCode.VALIDATION_FAILED,
+        message: 'Every session on this booking is already finished or cancelled',
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.bookingSession.updateMany({
+        where: { id: { in: cancellable.map((s) => s.id) } },
+        data: { status: 'CANCELLED_BY_ADMIN', cancelReason: reason },
+      });
+
+      await tx.bookingStatusHistory.createMany({
+        data: cancellable.map((s) => ({
+          bookingId: booking.id,
+          sessionId: s.id,
+          fromStatus: s.status,
+          toStatus: 'CANCELLED_BY_ADMIN' as const,
+          actorType: 'ADMIN' as const,
+          actorId: adminUserId,
+          reason,
+        })),
+      });
+
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: { cancelReason: reason },
+      });
+    });
+
+    this.logger.log(
+      `Booking ${booking.code} cancelled by admin ${adminUserId}: ${cancellable.length} session(s)`,
+    );
+
+    return {
+      id: booking.id,
+      code: booking.code,
+      cancelledSessions: cancellable.length,
+      paymentStatus: booking.paymentStatus,
+    };
   }
 
   /** Full detail for one booking, scoped to its owner. */

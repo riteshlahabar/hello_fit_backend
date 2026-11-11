@@ -19,6 +19,7 @@ import {
   Roles,
 } from '../../common/decorators/auth.decorators';
 import { ReviewService } from './review.service';
+import { ListReviewsQueryDto } from './dto/admin-review.dto';
 import {
   EditReviewDto,
   ModerateReviewDto,
@@ -281,6 +282,18 @@ export class PublicReviewController {
 @AllowAudience('admin')
 export class AdminReviewController {
   constructor(private readonly reviews: ReviewService) {}
+
+  /**
+   * PDF 6.10 — the review table. Customer-to-provider only; the
+   * instructor-to-customer direction and its confidential note are never
+   * returned here.
+   */
+  @RequirePermissions('reviews:view')
+  @Get('reviews')
+  async list(@Query() query: ListReviewsQueryDto) {
+    const { rows, meta } = await this.reviews.listForAdmin(query);
+    return { data: rows, meta };
+  }
 
   @RequirePermissions('reviews:view')
   @Get('reviews/moderation-queue')
