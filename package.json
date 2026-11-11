@@ -35,7 +35,8 @@
     "smoke:admin-payments": "node -r dotenv/config test/smoke-admin-payments.mjs",
     "smoke:admin-earnings": "node -r dotenv/config test/smoke-admin-earnings.mjs",
     "smoke:admin-dashboard": "node -r dotenv/config test/smoke-admin-dashboard.mjs",
-    "smoke:admin-coupons": "node -r dotenv/config test/smoke-admin-coupons.mjs"
+    "smoke:admin-coupons": "node -r dotenv/config test/smoke-admin-coupons.mjs",
+    "smoke:admin-reports": "node -r dotenv/config test/smoke-admin-reports.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

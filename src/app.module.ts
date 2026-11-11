@@ -19,6 +19,7 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CouponModule } from './modules/coupon/coupon.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { AdminUserModule } from './modules/admin-user/admin-user.module';
 import { MastersModule } from './modules/masters/masters.module';
 import { InstructorModule } from './modules/instructor/instructor.module';
@@ -63,6 +64,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AdminUserModule,
     DashboardModule,
     CouponModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [
