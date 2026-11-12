@@ -22,6 +22,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { AdminUserModule } from './modules/admin-user/admin-user.module';
 import { MastersModule } from './modules/masters/masters.module';
+import { ServiceabilityModule } from './modules/serviceability/serviceability.module';
 import { InstructorModule } from './modules/instructor/instructor.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { PayoutModule } from './modules/payout/payout.module';
@@ -65,6 +66,7 @@ import { PrismaModule } from './prisma/prisma.module';
     DashboardModule,
     CouponModule,
     ReportsModule,
+    ServiceabilityModule,
   ],
   controllers: [AppController],
   providers: [

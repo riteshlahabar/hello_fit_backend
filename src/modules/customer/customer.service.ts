@@ -7,9 +7,11 @@ import {
 import { CustomerRepository } from './customer.repository';
 import { SettingsService } from '../settings/settings.service';
 import { AuditService } from '../audit/audit.service';
+import { ServiceabilityService } from '../serviceability/serviceability.service';
 import { ErrorCode } from '../../common/errors/error-codes';
 import { parseCalendarDate } from '../../common/dates/calendar';
 import { isValidReferralCode, normaliseReferralCode } from './referral';
+import { addressGeoUpdate, resolveAddressGeo } from './address-geo';
 import type {
   CreateAddressDto,
   UpdateAddressDto,
@@ -47,6 +49,7 @@ export class CustomerService {
     private readonly repo: CustomerRepository,
     private readonly settings: SettingsService,
     private readonly audit: AuditService,
+    private readonly serviceability: ServiceabilityService,
   ) {}
 
   // ----------------------------------------------------------------- profile
@@ -175,6 +178,13 @@ export class CustomerService {
     // preselect.
     const makeDefault = count === 0 || dto.isDefault === true;
 
+    const resolved = await resolveAddressGeo(
+      this.serviceability,
+      dto.pincode,
+      dto.areaId,
+      dto.cityId,
+    );
+
     return this.repo.createAddress(
       profile.id,
       {
@@ -182,8 +192,8 @@ export class CustomerService {
         line1: dto.line1,
         line2: dto.line2 ?? null,
         landmark: dto.landmark ?? null,
-        cityId: dto.cityId ?? null,
-        areaId: dto.areaId ?? null,
+        cityId: resolved.cityId,
+        areaId: resolved.areaId,
         pincode: dto.pincode,
         lat: dto.lat ?? null,
         lng: dto.lng ?? null,
@@ -206,12 +216,7 @@ export class CustomerService {
       ...(dto.lat !== undefined && { lat: dto.lat }),
       ...(dto.lng !== undefined && { lng: dto.lng }),
       ...(dto.accessNotes !== undefined && { accessNotes: dto.accessNotes }),
-      ...(dto.cityId !== undefined && {
-        city: { connect: { id: dto.cityId } },
-      }),
-      ...(dto.areaId !== undefined && {
-        area: { connect: { id: dto.areaId } },
-      }),
+      ...(await addressGeoUpdate(this.serviceability, address, dto)),
     });
   }
 

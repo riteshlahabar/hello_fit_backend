@@ -13,9 +13,18 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Gender } from '../../../generated/prisma/enums';
+import {
+  PINCODE_MESSAGE,
+  PINCODE_RE,
+} from '../../../common/validation/pincode';
 
-/** Indian PIN codes are exactly six digits and never start with zero. */
-const PINCODE = /^[1-9][0-9]{5}$/;
+/**
+ * The shared rule, not a local copy. `common/validation/pincode.ts` exists
+ * precisely so the address DTOs, the serviceability lookup and the masters
+ * bulk-add cannot drift — a second copy here would accept a code one surface
+ * can store and another cannot resolve.
+ */
+const PINCODE = PINCODE_RE;
 
 /**
  * Every field optional — PATCH semantics.
@@ -103,7 +112,7 @@ export class CreateAddressDto {
   @IsUUID()
   areaId?: string;
 
-  @Matches(PINCODE, { message: 'pincode must be a 6-digit Indian PIN code' })
+  @Matches(PINCODE, { message: PINCODE_MESSAGE })
   pincode!: string;
 
   /** Drives the distance score and the check-in geo-fence. */
@@ -156,7 +165,7 @@ export class UpdateAddressDto {
   areaId?: string;
 
   @IsOptional()
-  @Matches(PINCODE, { message: 'pincode must be a 6-digit Indian PIN code' })
+  @Matches(PINCODE, { message: PINCODE_MESSAGE })
   pincode?: string;
 
   @IsOptional()

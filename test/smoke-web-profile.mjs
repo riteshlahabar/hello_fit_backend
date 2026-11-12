@@ -72,11 +72,12 @@ const created = await s.call(
 
 s.check('address created', created?.data?.line1, '14 Baner Road');
 s.check('the first address is the default', created?.data?.isDefault, true);
-// The website cannot set a city or area — there is no public master list —
-// so the page relies on these being optional. Asserted so a future change
-// that makes them mandatory fails here rather than in the browser.
-s.check('city is null without a picker', created?.data?.cityId, null);
-s.check('area is null without a picker', created?.data?.areaId, null);
+// These two asserted `null` until 12 Nov 2026, which recorded the bug rather
+// than the rule: the website has no area picker, so every address it saved was
+// area-less and `findSlots` answered it with `[]`. The server now resolves the
+// area from the PIN, so the page needs no picker at all.
+s.check('city resolved from the pin', typeof created?.data?.cityId, 'string');
+s.check('area resolved from the pin', typeof created?.data?.areaId, 'string');
 
 const patched = await s.call(
   'PATCH',
@@ -87,6 +88,9 @@ const patched = await s.call(
 );
 s.check('address edited', patched?.data?.line1, '14 Baner Road, Flat 3');
 s.check('pincode edited', patched?.data?.pincode, '411046');
+// 411046 is attached to no area, so moving there drops the stale Baner area
+// instead of keeping it and offering the wrong neighbourhood's teachers.
+s.check('a move to an unmapped pin clears the area', patched?.data?.areaId, null);
 
 const list = await s.call('GET', '/app/customer/addresses', undefined, 200, 'customer');
 s.check('one address listed', list?.data?.length, 1);

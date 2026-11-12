@@ -5,9 +5,10 @@ import { CustomerService } from './customer.service';
 import { CustomerRepository } from './customer.repository';
 import { AuditModule } from '../audit/audit.module';
 import { SettingsModule } from '../settings/settings.module';
+import { ServiceabilityModule } from '../serviceability/serviceability.module';
 
 @Module({
-  imports: [SettingsModule, AuditModule],
+  imports: [SettingsModule, AuditModule, ServiceabilityModule],
   controllers: [CustomerController, AdminCustomerController],
   providers: [CustomerService, CustomerRepository],
   exports: [CustomerService],

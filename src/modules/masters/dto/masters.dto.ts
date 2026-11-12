@@ -12,6 +12,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { PINCODE_MESSAGE, PINCODE_RE } from '../../../common/validation/pincode';
 
 /**
  * Shared list filters. Page/limit per the admin-table convention; `q` is a
@@ -164,9 +165,17 @@ export class ListPincodesQueryDto extends ListMastersQueryDto {
 }
 
 export class CreatePincodeDto {
-  /** Six digits, the Indian format. The column is VarChar(10). */
+  /**
+   * Six digits, the Indian format. The column is VarChar(10).
+   *
+   * The shared rule, not a local `/^\d{6}$/`: that one allowed a leading zero,
+   * so ops could attach `012345` to an area and no address could ever use it —
+   * `CreateAddressDto` and the serviceability lookup both reject it. A PIN that
+   * is storable but unresolvable is the drift
+   * `common/validation/pincode.ts` exists to stop.
+   */
   @IsString()
-  @Matches(/^\d{6}$/, { message: 'code must be a 6-digit pincode' })
+  @Matches(PINCODE_RE, { message: PINCODE_MESSAGE })
   code!: string;
 
   @IsUUID()
@@ -180,7 +189,7 @@ export class CreatePincodeDto {
 export class UpdatePincodeDto {
   @IsOptional()
   @IsString()
-  @Matches(/^\d{6}$/, { message: 'code must be a 6-digit pincode' })
+  @Matches(PINCODE_RE, { message: PINCODE_MESSAGE })
   code?: string;
 
   @IsOptional()
@@ -201,7 +210,7 @@ export class BulkCreatePincodesDto {
   areaId!: string;
 
   @IsString({ each: true })
-  @Matches(/^\d{6}$/, { each: true, message: 'each code must be 6 digits' })
+  @Matches(PINCODE_RE, { each: true, message: PINCODE_MESSAGE })
   codes!: string[];
 }
 

@@ -31,6 +31,13 @@ export const ErrorCode = {
   ADDRESS_LIMIT_REACHED: 'ADDRESS_LIMIT_REACHED',
   /** An upcoming session is still scheduled at this address. */
   ADDRESS_IN_USE: 'ADDRESS_IN_USE',
+  /** The PIN code is served, but not by the `areaId` the client sent. */
+  PINCODE_AREA_MISMATCH: 'PINCODE_AREA_MISMATCH',
+  /**
+   * The PIN code falls in more than one active service area and the client
+   * sent no `areaId`. The refusal carries the candidates so the form can ask.
+   */
+  AREA_AMBIGUOUS: 'AREA_AMBIGUOUS',
 
   // Teacher onboarding and KYC
   /** The caller has no InstructorProfile; they have not applied. */

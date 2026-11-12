@@ -36,6 +36,8 @@
     "smoke:admin-earnings": "node -r dotenv/config test/smoke-admin-earnings.mjs",
     "smoke:admin-dashboard": "node -r dotenv/config test/smoke-admin-dashboard.mjs",
     "smoke:admin-coupons": "node -r dotenv/config test/smoke-admin-coupons.mjs",
+    "smoke:serviceability": "node -r dotenv/config test/smoke-serviceability.mjs",
+    "backfill:address-areas": "node -r dotenv/config test/backfill-address-areas.mjs",
     "otp:clear": "node -r dotenv/config test/clear-otp-window.mjs",
     "smoke:web-bookings": "node -r dotenv/config test/smoke-web-bookings.mjs",
     "smoke:web-login": "node -r dotenv/config test/smoke-web-login.mjs",
