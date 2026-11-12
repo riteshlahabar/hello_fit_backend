@@ -31,6 +31,21 @@ export class EnvVars {
   @Max(65535)
   PORT: number = 3000;
 
+  /**
+   * Interface to bind. `0.0.0.0` for local development, so a phone on the LAN
+   * can reach the API while the Flutter apps are being built.
+   *
+   * **Set it to `127.0.0.1` on any shared or internet-facing host.** Behind
+   * Nginx the app never needs a public socket, and a public one is a way past
+   * whatever Nginx is enforcing — on the review VPS that is the IP allowlist,
+   * and past it sits `POST /auth/otp/send` handing out OTP codes in
+   * development. A host firewall is not a substitute: `ufw` was inactive on
+   * that box, so `0.0.0.0:4000` would have been open to the internet.
+   */
+  @IsString()
+  @IsNotEmpty()
+  HOST: string = '0.0.0.0';
+
   @IsString()
   @IsNotEmpty()
   DATABASE_URL!: string;

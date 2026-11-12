@@ -35,10 +35,14 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = config.get('PORT', { infer: true });
-  await app.listen(port);
+  // Explicit host: behind a reverse proxy this must be loopback, or the app
+  // answers the internet directly and bypasses whatever the proxy enforces.
+  // See HOST in config/env.validation.ts.
+  const host = config.get('HOST', { infer: true });
+  await app.listen(port, host);
 
   new Logger('Bootstrap').log(
-    `HelloFit API listening on http://localhost:${port}/api/v1`,
+    `HelloFit API listening on http://${host}:${port}/api/v1`,
   );
 }
 
