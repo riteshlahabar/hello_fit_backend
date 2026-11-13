@@ -1,4 +1,7 @@
 import {
+  ArrayNotEmpty,
+  IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
@@ -13,6 +16,7 @@ import {
   InstructorStatus,
   KycStatus,
   OnboardingStage,
+  SessionFormat,
   VerifyStatus,
 } from '../../../generated/prisma/enums';
 
@@ -110,7 +114,28 @@ export class AdminUpdateInstructorDto {
   @Min(1)
   @Max(100)
   travelRadiusKm?: number;
+
+  /**
+   * Where this provider will hold sessions — PDF 5.5's "Session location"
+   * filter. Required to be non-empty when sent: an empty array would make the
+   * provider invisible to the first filter every visitor touches.
+   *
+   * Set by ops today because `instructor_app/` is still a bare scaffold; it
+   * moves to the provider themselves under §4.5 when that app exists.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsEnum(SessionFormat, { each: true })
+  sessionFormats?: SessionFormat[];
 }
+
+/** Approve or revoke one of a provider's service offerings (PDF 6.5). */
+export class SetOfferingApprovalDto {
+  @IsBoolean()
+  approved!: boolean;
+}
+
 
 /** Suspend or blacklist. The reason reaches the teacher and the audit log. */
 export class ChangeInstructorStatusDto {

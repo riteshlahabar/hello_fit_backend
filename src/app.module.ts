@@ -23,6 +23,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { AdminUserModule } from './modules/admin-user/admin-user.module';
 import { MastersModule } from './modules/masters/masters.module';
 import { ServiceabilityModule } from './modules/serviceability/serviceability.module';
+import { ProviderSearchModule } from './modules/provider-search/provider-search.module';
 import { InstructorModule } from './modules/instructor/instructor.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { PayoutModule } from './modules/payout/payout.module';
@@ -67,6 +68,7 @@ import { PrismaModule } from './prisma/prisma.module';
     CouponModule,
     ReportsModule,
     ServiceabilityModule,
+    ProviderSearchModule,
   ],
   controllers: [AppController],
   providers: [

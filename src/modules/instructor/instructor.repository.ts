@@ -124,6 +124,39 @@ export class InstructorRepository {
     });
   }
 
+  /**
+   * This provider's service offerings, for the admin detail screen — PDF 6.5
+   * "review provider service information".
+   *
+   * Includes the unapproved and the deactivated on purpose: the screen's whole
+   * job is to show an administrator what is waiting for approval. Only soft
+   * deletes are hidden.
+   */
+  listOfferings(instructorId: string) {
+    return this.prisma.instructorService.findMany({
+      where: { instructorId, deletedAt: null },
+      select: {
+        id: true,
+        level: true,
+        customPrice: true,
+        isActive: true,
+        approvedAt: true,
+        createdAt: true,
+        service: {
+          select: {
+            id: true,
+            name: true,
+            basePrice: true,
+            durationMin: true,
+            isActive: true,
+            category: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: [{ approvedAt: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
   findDocument(instructorId: string, documentId: string) {
     return this.prisma.document.findFirst({
       where: {

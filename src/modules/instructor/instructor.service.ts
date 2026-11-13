@@ -9,6 +9,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InstructorRepository } from './instructor.repository';
+import { setOfferingApproval } from './offering-approval';
+import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationService } from '../notification/notification.service';
 import { SettingsService } from '../settings/settings.service';
@@ -90,6 +92,7 @@ export class InstructorService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationService,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
+    private readonly prisma: PrismaService,
   ) {}
 
   // =========================================================== teacher side
@@ -159,6 +162,9 @@ export class InstructorService {
       ...(dto.homeBaseLng !== undefined && { homeBaseLng: dto.homeBaseLng }),
       ...(dto.travelRadiusKm !== undefined && {
         travelRadiusKm: dto.travelRadiusKm,
+      }),
+      ...(dto.sessionFormats !== undefined && {
+        sessionFormats: dto.sessionFormats,
       }),
     });
 
@@ -399,6 +405,10 @@ export class InstructorService {
       approval: canApprove(policy, profile, documents),
       allowedStages: allowedTransitions(policy, profile.onboardingStage),
       upcomingSessions: await this.repo.countUpcomingSessions(profile.id),
+      // PDF 6.5: "review provider service information" and "manage permitted
+      // service visibility". Unapproved offerings are included — reviewing
+      // them is the point of the screen.
+      offerings: await this.repo.listOfferings(profile.id),
     };
   }
 
@@ -560,6 +570,40 @@ export class InstructorService {
   }
 
   /** Ops-owned scheduling fields. The teacher cannot set these themselves. */
+
+  /**
+   * Publish or unpublish one of a provider's service offerings (PDF 6.5).
+   * This is what decides whether they appear on Find a Trainer at all.
+   */
+  async setOfferingApproval(
+    instructorId: string,
+    serviceId: string,
+    approved: boolean,
+    actor: AdminActor,
+  ) {
+    const profile = await this.requireProfile(instructorId);
+
+    const { offering, updated } = await setOfferingApproval(
+      this.prisma,
+      profile.id,
+      serviceId,
+      approved,
+    );
+
+    await this.audit.record({
+      adminUserId: actor.adminUserId,
+      action: approved ? 'instructor.offering.approved' : 'instructor.offering.revoked',
+      entityType: 'InstructorService',
+      entityId: updated.id,
+      before: { approvedAt: offering.approvedAt },
+      after: { approvedAt: updated.approvedAt },
+      ipAddress: actor.ipAddress,
+      requestId: actor.requestId,
+    });
+
+    return updated;
+  }
+
   async updateForAdmin(
     instructorId: string,
     dto: AdminUpdateInstructorDto,
@@ -587,6 +631,11 @@ export class InstructorService {
       ...(dto.travelRadiusKm !== undefined && {
         travelRadiusKm: dto.travelRadiusKm,
       }),
+      // Ops sets this until `instructor_app` exists (§4.5). Without it the
+      // PATCH validated the list, audited a change and saved nothing.
+      ...(dto.sessionFormats !== undefined && {
+        sessionFormats: dto.sessionFormats,
+      }),
     });
 
     await this.audit.record({
@@ -599,12 +648,14 @@ export class InstructorService {
         dailySessionCap: profile.dailySessionCap,
         travelBufferMin: profile.travelBufferMin,
         travelRadiusKm: profile.travelRadiusKm,
+        sessionFormats: profile.sessionFormats,
       },
       after: {
         branchId: updated.branchId,
         dailySessionCap: updated.dailySessionCap,
         travelBufferMin: updated.travelBufferMin,
         travelRadiusKm: updated.travelRadiusKm,
+        sessionFormats: updated.sessionFormats,
       },
       ipAddress: actor.ipAddress,
       requestId: actor.requestId,

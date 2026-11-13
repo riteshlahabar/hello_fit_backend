@@ -77,6 +77,22 @@ enum DutyStatus {
   OFF_DUTY
 }
 
+/// Where a provider will hold a session (PDF §5.5's "Session location" filter).
+///
+/// The website's Find a Trainer sidebar filters on exactly these three, and
+/// nothing in the database answered for them before — a provider could be
+/// found by category, price and rating but not by whether they would come to
+/// you. Set per provider, and required: an empty list would make a provider
+/// unfindable by the one filter every visitor uses first.
+enum SessionFormat {
+  /// The provider travels to the customer. The home-service default.
+  CUSTOMER_HOME
+  /// The customer goes to the provider's studio or venue.
+  PROVIDER_LOCATION
+  /// Remote session, no travel either way.
+  ONLINE
+}
+
 enum DocumentOwnerType {
   INSTRUCTOR
   CUSTOMER
@@ -194,6 +210,10 @@ model InstructorProfile {
   experienceYears  Int              @default(0) @map("experience_years")
   languages        String[]
   specialisations  String[]
+  /// Where this provider will work (PDF §5.5 "Session location"). Defaults to
+  /// travelling to the customer, which is what HelloFit is; a provider who
+  /// also teaches online or at their own venue adds those.
+  sessionFormats   SessionFormat[]  @default([CUSTOMER_HOME]) @map("session_formats")
   photoUrl         String?          @map("photo_url") @db.Text
   /// Home base the travel radius and distance score are measured from.
   homeBaseLat      Decimal?         @map("home_base_lat") @db.Decimal(10, 7)

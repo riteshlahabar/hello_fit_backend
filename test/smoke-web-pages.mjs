@@ -56,9 +56,14 @@ await page('/reviews', {
 
 s.section('booking');
 
+// The mounted marker is the **Suspense fallback**, not the wizard's own
+// "Loading services". `BookingWizard` reads `?service=` through
+// `useSearchParams` so the homepage search can preselect a service, and Next
+// refuses to prerender that without a boundary — so the server now serves the
+// boundary's copy and the wizard's loading state appears only in the browser.
 await page('/booking', {
   gone: ['Personal Yoga Session', 'Mon, 02 Nov 2026', 'Sneha Patil', '₹600'],
-  mounted: 'Loading services',
+  mounted: 'Loading the booking form',
 });
 
 s.section('checkout');

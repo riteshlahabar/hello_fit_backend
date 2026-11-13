@@ -46,6 +46,10 @@
     "smoke:web-reviews": "node -r dotenv/config test/smoke-web-reviews.mjs",
     "smoke:web-checkout": "node -r dotenv/config test/smoke-web-checkout.mjs",
     "smoke:web-pages": "node -r dotenv/config test/smoke-web-pages.mjs",
+    "smoke:provider-search": "node -r dotenv/config test/smoke-provider-search.mjs",
+    "smoke:web-home-search": "node -r dotenv/config test/smoke-web-home-search.mjs",
+    "smoke:web-logout": "node -r dotenv/config test/smoke-web-logout.mjs",
+    "smoke:web-dashboard": "node -r dotenv/config test/smoke-web-dashboard.mjs",
     "smoke:admin-reports": "node -r dotenv/config test/smoke-admin-reports.mjs"
   },
   "dependencies": {

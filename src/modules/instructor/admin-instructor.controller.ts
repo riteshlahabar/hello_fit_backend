@@ -19,6 +19,7 @@ import {
 import { InstructorService, type AdminActor } from './instructor.service';
 import {
   AdminUpdateInstructorDto,
+  SetOfferingApprovalDto,
   ChangeInstructorStatusDto,
   ChangeOnboardingStageDto,
   ListInstructorsQueryDto,
@@ -168,6 +169,33 @@ export class AdminInstructorController {
       adminUserId: userId,
       ipAddress: req.ip,
       requestId: req.headers['x-request-id'] as string | undefined,
+    };
+  }
+
+  /**
+   * Publish or unpublish one of this provider's service offerings (PDF 6.5,
+   * "manage permitted service visibility"). This is the switch that puts them
+   * on the website's Find a Trainer at all — see provider-visibility.ts.
+   */
+  @Post(':id/services/:serviceId/approval')
+  @RequirePermissions('instructors:approve')
+  @HttpCode(200)
+  async setOfferingApproval(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Body() dto: SetOfferingApprovalDto,
+    @CurrentUser('id') userId: string,
+    @Req() req: Request,
+  ) {
+    const data = await this.instructors.setOfferingApproval(
+      id,
+      serviceId,
+      dto.approved,
+      this.actor(userId, req),
+    );
+    return {
+      data,
+      message: dto.approved ? 'Service published' : 'Service unpublished',
     };
   }
 }
