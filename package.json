@@ -37,6 +37,9 @@
     "smoke:admin-dashboard": "node -r dotenv/config test/smoke-admin-dashboard.mjs",
     "smoke:admin-coupons": "node -r dotenv/config test/smoke-admin-coupons.mjs",
     "smoke:serviceability": "node -r dotenv/config test/smoke-serviceability.mjs",
+    "smoke:plans": "node -r dotenv/config test/smoke-plans.mjs",
+    "smoke:favourites": "node -r dotenv/config test/smoke-favourites.mjs",
+    "smoke:billing": "node -r dotenv/config test/smoke-billing.mjs",
     "backfill:address-areas": "node -r dotenv/config test/backfill-address-areas.mjs",
     "otp:clear": "node -r dotenv/config test/clear-otp-window.mjs",
     "smoke:web-bookings": "node -r dotenv/config test/smoke-web-bookings.mjs",
@@ -50,6 +53,11 @@
     "smoke:web-home-search": "node -r dotenv/config test/smoke-web-home-search.mjs",
     "smoke:web-logout": "node -r dotenv/config test/smoke-web-logout.mjs",
     "smoke:web-dashboard": "node -r dotenv/config test/smoke-web-dashboard.mjs",
+    "smoke:web-find-a-trainer": "node -r dotenv/config test/smoke-web-find-a-trainer.mjs",
+    "smoke:web-shell": "node -r dotenv/config test/smoke-web-shell.mjs",
+    "smoke:web-plans": "node -r dotenv/config test/smoke-web-plans.mjs",
+    "smoke:web-billing": "node -r dotenv/config test/smoke-web-billing.mjs",
+    "smoke:web-trainer-profile": "node -r dotenv/config test/smoke-web-trainer-profile.mjs",
     "smoke:admin-reports": "node -r dotenv/config test/smoke-admin-reports.mjs"
   },
   "dependencies": {

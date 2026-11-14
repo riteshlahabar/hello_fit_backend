@@ -182,11 +182,16 @@ model CustomerProfile {
   referredById String?   @map("referred_by_id") @db.Uuid
   isBlocked    Boolean   @default(false) @map("is_blocked")
   blockReason  String?   @map("block_reason") @db.Text
+  /// The membership tier this customer chose on the website. Nothing is
+  /// charged for it — see the Plan model.
+  planId       String?   @map("plan_id") @db.Uuid
 
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   referredBy CustomerProfile?  @relation("Referral", fields: [referredById], references: [id], onDelete: SetNull)
   referrals  CustomerProfile[] @relation("Referral")
   addresses  Address[]
+  plan       Plan?             @relation(fields: [planId], references: [id], onDelete: SetNull)
+  favourites Favourite[]
 
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
@@ -243,6 +248,7 @@ model InstructorProfile {
   deletedAt              DateTime?               @map("deleted_at")
   instructorServices     InstructorService[]
   instructorServiceAreas InstructorServiceArea[]
+  favouritedBy           Favourite[]
   availabilityRules      AvailabilityRule[]
   availabilityOverrides  AvailabilityOverride[]
   leaves                 Leave[]
@@ -1947,4 +1953,97 @@ model NotificationPreference {
 
   @@unique([userId, channel, eventKey])
   @@map("notification_preferences")
+}
+
+/// A membership tier the customer can choose — the website's Plans page.
+///
+/// Added 13 Nov 2026 on the client's instruction. **It is not in the v3 PDF**
+/// (see state/open-points.md); the page was supplied as a design
+/// (`hellofit-membership-plans-subscription.html`) and asked for.
+///
+/// "Plan" is the only word used. Membership and Subscription mean the same
+/// thing and were deliberately dropped so three names cannot drift apart.
+///
+/// **Choosing a plan charges nothing.** There is no gateway subscription, no
+/// renewal and no expiry — `CustomerProfile.planId` records the choice and
+/// that is all it does. If billing is ever wanted it is separate work.
+model Plan {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @db.VarChar(60)
+  slug        String  @unique @db.VarChar(60)
+  /// The card's emoji badge, e.g. 🌱 / 🔥 / 👑.
+  icon        String? @db.VarChar(8)
+  /// The small line above the name — "Start strong", "Build momentum".
+  eyebrow     String? @db.VarChar(60)
+  description String? @db.VarChar(255)
+  /// Rupees per month. 0 is a real value: the demo's Starter tier is free.
+  priceMonthly Decimal @default(0) @map("price_monthly") @db.Decimal(10, 2)
+  /// Rupees per month when billed yearly. The design's annual toggle reads it.
+  priceYearly  Decimal @default(0) @map("price_yearly") @db.Decimal(10, 2)
+  /// "Billed monthly · Cancel anytime", or "No membership fee".
+  billingCaption String? @map("billing_caption") @db.VarChar(120)
+  /// The MOST POPULAR ribbon. At most one plan may carry it — enforced in the
+  /// service, not here, because a partial unique index cannot say "at most one
+  /// row where true" portably.
+  isPopular   Boolean @default(false) @map("is_popular")
+  /// Left-to-right order of the cards.
+  sortOrder   Int     @default(0) @map("sort_order")
+  isActive    Boolean @default(true) @map("is_active")
+
+  features  PlanFeature[]
+  customers CustomerProfile[]
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([isActive, sortOrder])
+  @@map("plans")
+}
+
+/// One ✓ or – line in a plan card's "what's included" list.
+model PlanFeature {
+  id        String  @id @default(uuid()) @db.Uuid
+  planId    String  @map("plan_id") @db.Uuid
+  label     String  @db.VarChar(120)
+  /// ✓ when true, – when false. A struck-through line is as much a part of the
+  /// design as a ticked one: it is how a tier shows what it does not give you.
+  included  Boolean @default(true)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([planId, sortOrder])
+  @@map("plan_features")
+}
+
+/// A trainer a customer saved — the website's Saved Trainers page.
+///
+/// Added 13 Nov 2026 on the client's instruction. **Not in the v3 PDF**
+/// (state/open-points.md): "saved" appears there nine times and never means a
+/// favourite trainer — it is "saved profile information" and "saved address".
+///
+/// The heart on the Find a Trainer card has existed since the design arrived
+/// and did nothing but raise a toast. This is what it writes to.
+///
+/// Deliberately thin: a join row and a timestamp. No notes, no folders, no
+/// ordering — none of that was asked for, and the page lists what was saved.
+model Favourite {
+  id           String @id @default(uuid()) @db.Uuid
+  customerId   String @map("customer_id") @db.Uuid
+  instructorId String @map("instructor_id") @db.Uuid
+
+  customer   CustomerProfile   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  instructor InstructorProfile @relation(fields: [instructorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// Saving twice is the same as saving once — the API treats a repeat POST as
+  /// success rather than a conflict, so a double tap cannot fail.
+  @@unique([customerId, instructorId])
+  @@index([customerId, createdAt])
+  @@map("favourites")
 }

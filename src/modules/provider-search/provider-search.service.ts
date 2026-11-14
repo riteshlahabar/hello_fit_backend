@@ -2,26 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ProviderSearchRepository } from './provider-search.repository';
 import { ErrorCode } from '../../common/errors/error-codes';
 import type { SearchProvidersQueryDto } from './dto/provider-search.dto';
+import { priceOf, toProviderCard, type Offering } from './provider-card';
 
 const DEFAULT_LIMIT = 12;
-
-type Offering = {
-  id: string;
-  level: string;
-  customPrice: unknown;
-  service: {
-    id: string;
-    name: string;
-    slug: string;
-    durationMin: number;
-    basePrice: unknown;
-    category: { id: string; name: string; slug: string } | null;
-  };
-};
-
-/** The price a customer would actually pay: the provider's, else the service's. */
-const priceOf = (offering: Offering): number =>
-  Number(offering.customPrice ?? offering.service.basePrice);
 
 /**
  * Public provider search and profiles — PDF §5.5 and §5.6.
@@ -41,36 +24,7 @@ export class ProviderSearchService {
     const limit = query.limit ?? DEFAULT_LIMIT;
 
     const { rows, total } = await this.repo.search(query, (page - 1) * limit, limit);
-
-    const cards = rows.map((row) => {
-      const offerings = row.instructorServices as unknown as Offering[];
-      const prices = offerings.map(priceOf);
-
-      return {
-        id: row.id,
-        name: row.name,
-        photoUrl: row.photoUrl,
-        headline: row.bio,
-        experienceYears: row.experienceYears,
-        languages: row.languages,
-        specialisations: row.specialisations,
-        sessionFormats: row.sessionFormats,
-        rating: Number(row.ratingAvg),
-        ratingCount: row.ratingCount,
-        /** The design's card shows one "from ₹X" figure. */
-        fromPrice: prices.length ? Math.min(...prices) : null,
-        /** The pill on the photo is a category name. */
-        categories: [
-          ...new Map(
-            offerings
-              .map((o) => o.service.category)
-              .filter((c): c is NonNullable<typeof c> => Boolean(c))
-              .map((c) => [c.id, c]),
-          ).values(),
-        ],
-        serviceCount: offerings.length,
-      };
-    });
+    const cards = rows.map(toProviderCard);
 
     // `price` is sorted here, not in SQL: the figure is the cheapest of each
     // provider's matching offerings, which is not a column. Sorting the page

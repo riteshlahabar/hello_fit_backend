@@ -76,7 +76,7 @@ s.section('the avatar menu is on every signed-in page');
 // `aria-haspopup` avatar — and the items render on click.
 const PAGES = [
   '/dashboard', '/profile', '/my-bookings', '/notifications', '/reviews',
-  '/billing', '/goals', '/help', '/refunds', '/membership-plans',
+  '/billing', '/goals', '/help', '/refunds', '/plans',
   '/saved-trainers', '/support-tickets', '/workout-history', '/workout-plans',
 ];
 
@@ -103,11 +103,16 @@ s.section('logout is NOT in the dashboard sidebar any more');
 const dash = await fetch(`${SITE}/dashboard`).then((r) => r.text());
 s.check('no sidebar logout nav-btn', /class="nav-btn"[^>]*>\s*<span class="ico">⎋/.test(dash), false);
 
-s.section('the public homepage is untouched');
+s.section('the homepage carries the same header as every other page');
 
-// `/` uses the marketing header, not a signed-in topbar. An account menu there
-// would be a design change nobody asked for.
+// Until 13 Nov this asserted the homepage had NO avatar menu, because `/`
+// used the marketing header and the account pages used their own topbars.
+// The client then asked for one header everywhere, signed in or not
+// (13 Nov 2026), so the avatar is now on the homepage too — and that is the
+// instruction, not a regression. AvatarMenu offers Log in when signed out,
+// Log out when signed in, which is why one control can serve both.
 const home = await fetch(`${SITE}/`).then((r) => r.text());
-s.check('no avatar menu on the homepage', home.includes('aria-haspopup="menu"'), false);
+s.check('homepage has the shared avatar menu', home.includes('aria-haspopup="menu"'), true);
+s.check('and still offers Log in to a visitor', home.includes('Log in'), true);
 
 s.done();

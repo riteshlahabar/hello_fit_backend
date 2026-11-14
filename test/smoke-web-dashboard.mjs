@@ -59,9 +59,12 @@ const activeButtons = (html.match(/class="nav-btn active"/g) ?? []).length;
 s.check('one active nav button', activeButtons, 1);
 
 s.section('what the toggle reaches for');
-
 s.check('#sidebar present', html.includes('id="sidebar"'), true);
-s.check('#menuToggle present', html.includes('id="menuToggle"'), true);
+
+// The sidebar toggle moved into the shared Header on 13 Nov as
+// `SidebarToggle`. It is driven by a route list rather than a DOM check, so
+// this page is in SIDEBAR_ROUTES and the button IS server-rendered.
+s.check('sidebar toggle present', html.includes('id="menuToggle"'), true);
 
 s.section('the handler is in the deployed bundle');
 
