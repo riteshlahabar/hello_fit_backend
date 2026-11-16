@@ -111,7 +111,12 @@ s.section('what replaced them');
 // The live values arrive in the browser, so the server HTML carries the
 // loading and unknown states rather than the numbers themselves. Asserting
 // those proves the live components are mounted and the literals are not.
-s.check('identity renders a placeholder, not a name', html.includes('Good morning,'), true);
+// The greeting follows the reader's clock now, but a *server* render cannot
+// know their hour — `lib/greeting.ts` pins it to band 0 on purpose so hydration
+// has something stable to correct. So "Good Morning" is what the HTML always
+// carries, whatever time this suite runs. Capitalised on the client's
+// instruction, 16 Nov 2026.
+s.check('identity renders a placeholder, not a name', html.includes('Good Morning,'), true);
 s.check('the unknown marker is used', html.includes('—'), true);
 s.check('bookings panel mounted', html.includes('id="allBookingList"'), true);
 s.check('its filter still exists', html.includes('id="bookingFilter"'), true);
