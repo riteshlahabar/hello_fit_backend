@@ -25,7 +25,16 @@ const page = await fetch(`${SITE}/login`).then((r) => r.text());
 s.check('login page served', page.length > 1000, true);
 s.check('OTP field asks for a mobile, not an email', page.includes('10-digit mobile number'), true);
 s.check('six-digit code field present', page.includes('digit verification code'), true);
-s.check('send button present', page.includes('SEND ONE-TIME CODE'), true);
+// Renamed from SEND ONE-TIME CODE on the client's instruction, 16 Nov 2026.
+s.check('send button present', page.includes('SEND OTP'), true);
+
+// OTP is the only door (client, 16 Nov 2026). Verifying a code on an unknown
+// mobile already creates the account, so a separate registration was a second
+// name for the same thing. These four are gone and must not creep back.
+s.check('no Create account tab', page.includes('Create account'), false);
+s.check('no Google button', page.includes('Continue with Google'), false);
+s.check('no password link', page.includes('Use email and password instead'), false);
+s.check('no Create an account line', page.includes('New to HelloFit'), false);
 // .message is display:none until it also carries 'show' (page.css:59). Without
 // it the dev OTP code rendered invisibly and the flow looked broken.
 s.check('message bar can show', page.includes('class="message'), true);
