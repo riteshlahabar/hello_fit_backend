@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -16,6 +17,7 @@ import {
   RequirePermissions,
 } from '../../common/decorators/auth.decorators';
 import { AdminPackageService } from './admin-package.service';
+import { AdminCatalogDeleteService } from './admin-catalog-delete.service';
 import type { AdminActor } from './admin-catalog.service';
 import {
   CreatePackageDto,
@@ -25,15 +27,19 @@ import {
 } from './dto/admin-package.dto';
 
 /**
- * The Package menu (client pricing doc, 17 Nov 2026) — four routes.
+ * The Package menu (client pricing doc, 17 Nov 2026) — five routes.
  *
- * No delete: a booking points at its package and the invoice has to stay
- * explicable, so a package leaves the catalogue through `:id/status`.
+ * Delete is hard (client, 18 Nov 2026) but refused while a booking points
+ * at the package — the invoice has to stay explicable, so a used package
+ * leaves the catalogue through `:id/status` instead.
  */
 @Controller('admin/packages')
 @AllowAudience('admin')
 export class AdminPackageController {
-  constructor(private readonly packages: AdminPackageService) {}
+  constructor(
+    private readonly packages: AdminPackageService,
+    private readonly deletes: AdminCatalogDeleteService,
+  ) {}
 
   @Get()
   @RequirePermissions('catalog:view')
@@ -91,6 +97,24 @@ export class AdminPackageController {
           : dto.isActive
             ? 'Package is available to customers'
             : 'Package hidden from customers',
+    };
+  }
+
+  /**
+   * Hard delete (client, 18 Nov 2026) — refused with the booking count when a
+   * booking points at the package. `:id/status` is still the way to retire a
+   * package that has been used.
+   */
+  @Delete(':id')
+  @RequirePermissions('catalog:delete')
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+    @Req() req: Request,
+  ) {
+    return {
+      data: await this.deletes.deletePackage(id, this.actor(userId, req)),
+      message: 'Package deleted',
     };
   }
 

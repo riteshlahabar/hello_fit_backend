@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -16,6 +17,7 @@ import {
   RequirePermissions,
 } from '../../common/decorators/auth.decorators';
 import { AdminGroupSlabService } from './admin-group-slab.service';
+import { AdminCatalogDeleteService } from './admin-catalog-delete.service';
 import type { AdminActor } from './admin-catalog.service';
 import {
   CreateGroupSlabDto,
@@ -33,7 +35,10 @@ import {
 @Controller('admin/group-slabs')
 @AllowAudience('admin')
 export class AdminGroupSlabController {
-  constructor(private readonly slabs: AdminGroupSlabService) {}
+  constructor(
+    private readonly slabs: AdminGroupSlabService,
+    private readonly deletes: AdminCatalogDeleteService,
+  ) {}
 
   @Get()
   @RequirePermissions('catalog:view')
@@ -81,6 +86,24 @@ export class AdminGroupSlabController {
       message: dto.isActive
         ? 'Group slab is in use again'
         : 'Group slab retired — the next size down now applies',
+    };
+  }
+
+  /**
+   * Hard delete (client, 18 Nov 2026). Nothing stores a slab — the quote
+   * reads it live — so there is nothing to refuse for. Deleting one simply
+   * means that group size falls to the next slab down.
+   */
+  @Delete(':id')
+  @RequirePermissions('catalog:delete')
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+    @Req() req: Request,
+  ) {
+    return {
+      data: await this.deletes.deleteGroupSlab(id, this.actor(userId, req)),
+      message: 'Group slab deleted — the next size down now applies',
     };
   }
 

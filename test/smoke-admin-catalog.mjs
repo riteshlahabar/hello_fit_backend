@@ -88,8 +88,9 @@ try {
     const all = await call('GET', `/admin/catalog/categories?q=Smoke Renamed ${STAMP}&includeInactive=true`);
     check('shown with includeInactive', all?.data?.length, 1);
 
-    // There is no delete route — 6.5 does not grant one.
-    await call('DELETE', `/admin/catalog/categories/${categoryId}`, null, 404);
+    // Delete exists since 18 Nov and is covered by smoke-admin-catalog-delete;
+    // here the category is only emptied, so the delete must go through.
+    await call('DELETE', `/admin/catalog/categories/${categoryId}`, null, 200);
 
     // Services: review, filter, and the one visibility lever.
     const services = await call('GET', '/admin/catalog/services?limit=5');

@@ -8,6 +8,7 @@ import { AdminPackageController } from './admin-package.controller';
 import { AdminPackageService } from './admin-package.service';
 import { AdminServicePricingService } from './admin-service-pricing.service';
 import { AdminServiceCreateService } from './admin-service-create.service';
+import { AdminCatalogDeleteService } from './admin-catalog-delete.service';
 import { CatalogService } from './catalog.service';
 import { PricingOptionsService } from './pricing-options';
 import { AuditModule } from '../audit/audit.module';
@@ -27,6 +28,7 @@ import { AuditModule } from '../audit/audit.module';
     AdminGroupSlabService,
     AdminServicePricingService,
     AdminServiceCreateService,
+    AdminCatalogDeleteService,
     PricingOptionsService,
   ],
   exports: [CatalogService],

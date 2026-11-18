@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -19,6 +20,7 @@ import {
 import { AdminCatalogService, type AdminActor } from './admin-catalog.service';
 import { AdminServicePricingService } from './admin-service-pricing.service';
 import { AdminServiceCreateService } from './admin-service-create.service';
+import { AdminCatalogDeleteService } from './admin-catalog-delete.service';
 import { CreateServiceDto } from './dto/admin-service.dto';
 import { UpdateServicePricingDto } from './dto/admin-service-pricing.dto';
 import {
@@ -32,14 +34,16 @@ import {
 /**
  * Category and service management (PDF 6.5).
  *
- * Six routes. Categories are created and edited here. A service can be
+ * Eight routes. Categories are created and edited here. A service can be
  * **created** (client instruction, 18 Nov 2026), reviewed, priced and made
  * visible or hidden — but **not edited**: 4.5 gives the provider its name,
  * description and inclusions, and only creation and pricing were asked for.
  * Both of those knowingly go past 4.5. → `state/scope-documents.md`
  *
- * No delete for a category either — 6.5 lists create, edit, activate and
- * deactivate, and nothing else.
+ * **Delete is hard and refused when anything points at the row** (client,
+ * 18 Nov 2026): a category holding services, a service with bookings,
+ * sessions, trainer links or commission rules. The refusal names the counts.
+ * Deactivating and hiding are still there for a row with history.
  */
 @Controller('admin/catalog')
 @AllowAudience('admin')
@@ -48,6 +52,7 @@ export class AdminCatalogController {
     private readonly catalog: AdminCatalogService,
     private readonly servicePricing: AdminServicePricingService,
     private readonly serviceCreate: AdminServiceCreateService,
+    private readonly deletes: AdminCatalogDeleteService,
   ) {}
 
   @Get('categories')
@@ -156,6 +161,42 @@ export class AdminCatalogController {
     return {
       data: await this.servicePricing.update(id, dto, this.actor(userId, req)),
       message: 'Service pricing updated',
+    };
+  }
+
+  /**
+   * Hard delete (client, 18 Nov 2026). A category holding services is
+   * refused, naming the count: the services must go first, or the category
+   * can be deactivated instead.
+   */
+  @Delete('categories/:id')
+  @RequirePermissions('catalog:delete')
+  async removeCategory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+    @Req() req: Request,
+  ) {
+    return {
+      data: await this.deletes.deleteCategory(id, this.actor(userId, req)),
+      message: 'Category deleted',
+    };
+  }
+
+  /**
+   * Hard delete, refused while a booking, a session, a trainer link or a
+   * commission rule points at the service — the refusal names each count.
+   * A service with history is hidden through `:id/visibility` instead.
+   */
+  @Delete('services/:id')
+  @RequirePermissions('catalog:delete')
+  async removeService(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+    @Req() req: Request,
+  ) {
+    return {
+      data: await this.deletes.deleteService(id, this.actor(userId, req)),
+      message: 'Service deleted',
     };
   }
 

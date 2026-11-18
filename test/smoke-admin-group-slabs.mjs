@@ -117,7 +117,8 @@ await s.withAdmin(async () => {
   s.check('same row came back', revived?.data?.id, slab.id);
   s.check('with the new percent', revived?.data?.percentOff, 25);
 
-  s.section('no delete route');
+  s.section('delete');
+  await s.call('DELETE', `/admin/group-slabs/${slab.id}`, undefined, 200);
   await s.call('DELETE', `/admin/group-slabs/${slab.id}`, undefined, 404);
 });
 

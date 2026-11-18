@@ -32,6 +32,7 @@
     "smoke:admin-bookings": "node -r dotenv/config test/smoke-admin-bookings.mjs",
     "smoke:admin-catalog": "node -r dotenv/config test/smoke-admin-catalog.mjs",
     "smoke:admin-service-create": "node -r dotenv/config test/smoke-admin-service-create.mjs",
+    "smoke:admin-catalog-delete": "node -r dotenv/config test/smoke-admin-catalog-delete.mjs",
     "smoke:admin-reviews": "node -r dotenv/config test/smoke-admin-reviews.mjs",
     "smoke:admin-payments": "node -r dotenv/config test/smoke-admin-payments.mjs",
     "smoke:admin-earnings": "node -r dotenv/config test/smoke-admin-earnings.mjs",

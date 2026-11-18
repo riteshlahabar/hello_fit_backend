@@ -2,8 +2,8 @@
  * Admin Package menu — list, create, edit, activate/deactivate.
  *
  * A package holds a percent, never a price, and is global: no serviceId
- * anywhere in this suite. There is no delete route, so the teardown goes
- * through Prisma.
+ * anywhere in this suite. Delete exists since 18 Nov; the refusals it makes
+ * live in smoke-admin-catalog-delete. The teardown still goes through Prisma.
  */
 import { smoke } from './smoke-harness.mjs';
 
@@ -147,7 +147,8 @@ await s.withAdmin(async () => {
   });
   s.check('back on', on?.data?.isActive, true);
 
-  s.section('no delete route');
+  s.section('delete');
+  await s.call('DELETE', `/admin/packages/${created.id}`, undefined, 200);
   await s.call('DELETE', `/admin/packages/${created.id}`, undefined, 404);
 });
 
