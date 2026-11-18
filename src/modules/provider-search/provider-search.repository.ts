@@ -21,7 +21,6 @@ const CARD_SELECT = {
 const OFFERING_SELECT = {
   id: true,
   level: true,
-  customPrice: true,
   service: {
     select: {
       id: true,
@@ -61,18 +60,12 @@ export class ProviderSearchRepository {
     }
 
     if (query.maxPrice !== undefined) {
-      // `customPrice` wins when set, otherwise the service's base price — so
-      // the ceiling has to be applied to whichever one is in play.
-      offering.OR = [
-        { customPrice: { lte: query.maxPrice } },
-        {
-          customPrice: null,
-          service: {
-            ...(offering.service as object),
-            basePrice: { lte: query.maxPrice },
-          },
-        },
-      ];
+      // One price per service now that providers no longer set their own
+      // (client, 17 Nov 2026), so the ceiling has a single column to hit.
+      offering.service = {
+        ...(offering.service as object),
+        basePrice: { lte: query.maxPrice },
+      };
     }
 
     return {

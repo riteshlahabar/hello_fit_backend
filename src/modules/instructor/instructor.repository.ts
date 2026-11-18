@@ -138,7 +138,6 @@ export class InstructorRepository {
       select: {
         id: true,
         level: true,
-        customPrice: true,
         isActive: true,
         approvedAt: true,
         createdAt: true,

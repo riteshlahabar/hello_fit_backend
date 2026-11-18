@@ -4,6 +4,7 @@ import {
   unknownPlaceholders,
 } from './render';
 import {
+  type EventDefinition,
   ALL_EVENT_KEYS,
   NOTIFICATION_EVENTS,
   channelsFor,
@@ -92,7 +93,7 @@ describe('unknownPlaceholders', () => {
 describe('the spec chapter 9 matrix', () => {
   it('routes at least one audience for every event', () => {
     for (const key of ALL_EVENT_KEYS) {
-      const def = NOTIFICATION_EVENTS[key];
+      const def: EventDefinition = NOTIFICATION_EVENTS[key];
       const total =
         (def.customer?.length ?? 0) +
         (def.instructor?.length ?? 0) +
@@ -103,7 +104,7 @@ describe('the spec chapter 9 matrix', () => {
 
   it('declares no duplicate channels for one audience', () => {
     for (const key of ALL_EVENT_KEYS) {
-      const def = NOTIFICATION_EVENTS[key];
+      const def: EventDefinition = NOTIFICATION_EVENTS[key];
       for (const set of [def.customer, def.instructor, def.admin]) {
         if (!set) continue;
         expect(new Set(set).size).toBe(set.length);

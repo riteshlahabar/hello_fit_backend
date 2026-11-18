@@ -25,9 +25,9 @@ import {
 import {
   quote as computeQuote,
   splitSessionValues,
-  type AddonLine,
   type QuoteBreakup,
 } from './pricing.calculator';
+import { PricingResolver, type PricingBasis } from './pricing.resolver';
 import type { CreateBookingDto, QuoteBookingDto } from './dto/booking.dto';
 import type { ListBookingsQueryDto } from './dto/admin-booking.dto';
 import type { SessionStatus } from '../../generated/prisma/enums';
@@ -52,6 +52,7 @@ export class BookingService {
     private readonly availability: AvailabilityService,
     private readonly assignment: AssignmentService,
     private readonly coupons: CouponService,
+    private readonly pricing: PricingResolver,
   ) {}
 
   /**
@@ -84,6 +85,21 @@ export class BookingService {
   }
 
   /**
+   * The resolved pricing basis in the shape the calculator takes. Free
+   * sessions are excluded: they are delivered, never charged.
+   */
+  private quoteInput(basis: PricingBasis, dto: QuoteBookingDto) {
+    return {
+      unitPrice: basis.unitPrice,
+      sessionCount: basis.paidSessionCount,
+      participantCount: basis.participantCount,
+      percentAdjust: basis.percentAdjust,
+      addons: basis.addons,
+      distanceKm: dto.distanceKm,
+    };
+  }
+
+  /**
    * Price breakup shown before payment (spec 3.1 step 9). Pure read — creates
    * nothing, holds nothing, so the customer can adjust add-ons freely.
    */
@@ -93,29 +109,20 @@ export class BookingService {
   ): Promise<
     QuoteBreakup & {
       sessionCount: number;
+      freeSessionCount: number;
       currency: string;
       coupon: { code: string; discount: number } | null;
     }
   > {
     const payment = this.settings.get('payment');
-    const { service, pkg, addons } = await this.loadPricingInputs(dto);
-
-    const sessionCount = pkg?.sessionCount ?? dto.sessionCount ?? 1;
-
-    // A package carries its own total, so its per-session price is derived
-    // rather than taken from the service base price.
-    const unitPrice = pkg
-      ? Number(pkg.price) / pkg.sessionCount
-      : Number(service.basePrice);
+    const basis = await this.pricing.resolve(dto);
+    const sessionCount = basis.paidSessionCount;
 
     // Priced once with no discount, to get the base the coupon applies to;
     // then again with the discount the server computed from it.
     const undiscounted = computeQuote(
       {
-        unitPrice,
-        sessionCount,
-        addons,
-        distanceKm: dto.distanceKm,
+        ...this.quoteInput(basis, dto),
         walletApplied: dto.walletApplied,
       },
       payment,
@@ -129,10 +136,7 @@ export class BookingService {
 
     const breakup = computeQuote(
       {
-        unitPrice,
-        sessionCount,
-        addons,
-        distanceKm: dto.distanceKm,
+        ...this.quoteInput(basis, dto),
         discount,
         walletApplied: dto.walletApplied,
       },
@@ -142,6 +146,7 @@ export class BookingService {
     return {
       ...breakup,
       sessionCount,
+      freeSessionCount: basis.freeSessionCount,
       currency: 'INR',
       // US-A09: the applicable discount, displayed before payment.
       coupon: applied
@@ -161,7 +166,8 @@ export class BookingService {
    */
   async create(customerId: string, dto: CreateBookingDto) {
     const payment = this.settings.get('payment');
-    const { service, pkg, addons } = await this.loadPricingInputs(dto);
+    const basis = await this.pricing.resolve(dto);
+    const { service, pkg, addons } = basis;
 
     const address = await this.prisma.address.findFirst({
       where: { id: dto.addressId, customerId, deletedAt: null },
@@ -184,17 +190,18 @@ export class BookingService {
       });
     }
 
-    const sessionCount = occurrences.length;
-    const unitPrice = pkg
-      ? Number(pkg.price) / pkg.sessionCount
-      : Number(service.basePrice);
+    // Free sessions are occurrences too, so the paid count is the package's
+    // own figure — never the length of the list.
+    const freeSessionCount = Math.min(
+      basis.freeSessionCount,
+      Math.max(occurrences.length - basis.paidSessionCount, 0),
+    );
+    const sessionCount = occurrences.length - freeSessionCount;
 
     const undiscounted = computeQuote(
       {
-        unitPrice,
+        ...this.quoteInput(basis, dto),
         sessionCount,
-        addons,
-        distanceKm: dto.distanceKm,
         walletApplied: dto.walletApplied,
       },
       payment,
@@ -210,10 +217,8 @@ export class BookingService {
 
     const breakup = computeQuote(
       {
-        unitPrice,
+        ...this.quoteInput(basis, dto),
         sessionCount,
-        addons,
-        distanceKm: dto.distanceKm,
         discount,
         walletApplied: dto.walletApplied,
       },
@@ -221,10 +226,12 @@ export class BookingService {
     );
 
     // Values that sum back exactly to the gross, so the earning rows can
-    // never total more than the customer paid.
+    // never total more than the customer paid. The free sessions carry zero:
+    // the customer is not charged and the provider is not paid for them.
     const sessionValues = splitSessionValues(
       breakup.grossAmount,
       sessionCount,
+      freeSessionCount,
     );
 
     // If the customer picked a specific teacher, confirm they are still free
@@ -266,6 +273,7 @@ export class BookingService {
           addressId: address.id,
           type: pkg ? 'PACKAGE' : 'SINGLE',
           sessionCount,
+          participantCount: basis.participantCount,
           grossAmount: breakup.grossAmount,
           discount: breakup.discount,
           travelCharge: breakup.travelCharge,
@@ -733,90 +741,17 @@ export class BookingService {
 
   // -------------------------------------------------------------------------
 
-  private async loadPricingInputs(dto: QuoteBookingDto) {
-    const service = await this.prisma.service.findFirst({
-      where: { id: dto.serviceId, isActive: true, deletedAt: null },
-      select: { id: true, basePrice: true, durationMin: true },
-    });
-
-    if (!service) {
-      throw new NotFoundException({
-        code: ErrorCode.NOT_FOUND,
-        message: 'Service not found',
-      });
-    }
-
-    const pkg = dto.packageId
-      ? await this.prisma.package.findFirst({
-          where: {
-            id: dto.packageId,
-            serviceId: service.id,
-            isActive: true,
-            deletedAt: null,
-          },
-          select: {
-            id: true,
-            price: true,
-            sessionCount: true,
-            allowedWeekdays: true,
-            validityDays: true,
-          },
-        })
-      : null;
-
-    if (dto.packageId && !pkg) {
-      throw new NotFoundException({
-        code: ErrorCode.NOT_FOUND,
-        message: 'Package not found for this service',
-      });
-    }
-
-    const addons: AddonLine[] = [];
-
-    if (dto.addonIds?.length) {
-      const rows = await this.prisma.addon.findMany({
-        where: { id: { in: dto.addonIds }, isActive: true, deletedAt: null },
-        select: { id: true, price: true, applicableServiceIds: true },
-      });
-
-      if (rows.length !== dto.addonIds.length) {
-        throw new BadRequestException({
-          code: ErrorCode.VALIDATION_FAILED,
-          message: 'One or more add-ons are unavailable',
-        });
-      }
-
-      for (const row of rows) {
-        if (
-          row.applicableServiceIds.length > 0 &&
-          !row.applicableServiceIds.includes(service.id)
-        ) {
-          throw new BadRequestException({
-            code: ErrorCode.VALIDATION_FAILED,
-            message: 'An add-on does not apply to this service',
-          });
-        }
-
-        // Prices always come from the database, never from the request —
-        // otherwise the client could set its own price.
-        addons.push({
-          addonId: row.id,
-          quantity: 1,
-          unitPrice: Number(row.price),
-        });
-      }
-    }
-
-    return { service, pkg, addons };
-  }
-
   /**
    * Expands a package into dated occurrences on the chosen weekdays, or
    * returns the single requested session.
    */
   private buildOccurrences(
     dto: CreateBookingDto,
-    pkg: { sessionCount: number; allowedWeekdays: number[] } | null,
+    pkg: {
+      sessionCount: number;
+      freeSessionCount: number;
+      allowedWeekdays: number[];
+    } | null,
     durationMin: number,
   ): Array<{ date: Date; fromMinute: number; toMinute: number }> {
     const toMinute = dto.toMinute ?? dto.fromMinute + durationMin;
@@ -852,11 +787,15 @@ export class BookingService {
     }> = [];
     let cursor = first;
 
+    // Paid sessions plus the free ones the package throws in — a free session
+    // is still delivered, so it needs a date like any other.
+    const total = pkg.sessionCount + pkg.freeSessionCount;
+
     // Walk forward day by day, taking matching weekdays until the package is
     // filled. Bounded so a bad weekday list cannot loop forever.
     for (
       let guard = 0;
-      occurrences.length < pkg.sessionCount && guard < 400;
+      occurrences.length < total && guard < 400;
       guard += 1
     ) {
       if (weekdays.includes(calendarWeekday(cursor))) {

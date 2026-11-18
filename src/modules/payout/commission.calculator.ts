@@ -10,6 +10,7 @@ export type CommissionScopeName =
   | 'GLOBAL'
   | 'CATEGORY'
   | 'SERVICE'
+  | 'TRAINER_CATEGORY'
   | 'INSTRUCTOR';
 
 export interface CommissionRuleLike {
@@ -17,6 +18,7 @@ export interface CommissionRuleLike {
   scope: CommissionScopeName;
   categoryId?: string | null;
   serviceId?: string | null;
+  trainerCategoryId?: string | null;
   instructorId?: string | null;
   type: 'PERCENT' | 'FLAT';
   value: number;
@@ -29,16 +31,26 @@ export interface CommissionContext {
   instructorId: string;
   serviceId: string;
   categoryId: string;
+  /** The provider's band — Basic / Standard / Premium / Elite. Null when unset. */
+  trainerCategoryId: string | null;
   /** Session date, so a rule change does not retroactively alter old earnings. */
   on: Date;
 }
 
-/** Specificity order from the spec: instructor, then service, then category, then global. */
+/**
+ * Specificity order: instructor, then the provider's band, then service, then
+ * service category, then global.
+ *
+ * TRAINER_CATEGORY sits second because it is the normal place to set a rate
+ * (client, 17 Nov 2026) — one row covers every provider in the band — while an
+ * INSTRUCTOR row stays above it as the per-provider override for a special deal.
+ */
 const SCOPE_PRIORITY: Record<CommissionScopeName, number> = {
   INSTRUCTOR: 0,
-  SERVICE: 1,
-  CATEGORY: 2,
-  GLOBAL: 3,
+  TRAINER_CATEGORY: 1,
+  SERVICE: 2,
+  CATEGORY: 3,
+  GLOBAL: 4,
 };
 
 /**
@@ -58,6 +70,11 @@ export function resolveCommissionRule(
     switch (rule.scope) {
       case 'INSTRUCTOR':
         return rule.instructorId === context.instructorId;
+      case 'TRAINER_CATEGORY':
+        return (
+          context.trainerCategoryId !== null &&
+          rule.trainerCategoryId === context.trainerCategoryId
+        );
       case 'SERVICE':
         return rule.serviceId === context.serviceId;
       case 'CATEGORY':

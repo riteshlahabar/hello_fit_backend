@@ -67,7 +67,6 @@ export async function setOfferingApproval(
       id: true,
       approvedAt: true,
       isActive: true,
-      customPrice: true,
       service: { select: { id: true, name: true, basePrice: true } },
     },
   });

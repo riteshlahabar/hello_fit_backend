@@ -11,7 +11,7 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 import { DEFAULT_SETTINGS } from '../modules/settings/settings.defaults';
-import { seedPlans } from './seed-plans';
+import { seedPricing } from './seed-pricing';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -408,7 +408,7 @@ async function main() {
   await seedCatalog();
   await seedCommission();
   await seedReviewCriteria();
-  await seedPlans(prisma);
+  await seedPricing(prisma);
   console.log('Done.');
 }
 

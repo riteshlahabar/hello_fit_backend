@@ -35,6 +35,17 @@ export class QuoteBookingDto {
   @Max(60)
   sessionCount?: number;
 
+  /**
+   * People attending each session. Only a service with `allowMultiPerson`
+   * may send more than 1; the service's own `maxParticipants` is the real
+   * ceiling, this is the outer sanity bound (client, 17 Nov 2026).
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  participantCount?: number;
+
   @IsOptional()
   @IsArray()
   @ArrayUnique()

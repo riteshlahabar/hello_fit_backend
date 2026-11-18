@@ -283,7 +283,7 @@ export class AdminCatalogService {
 }
 
 /** Lower-case, hyphenated, ASCII — the shape the public catalog routes read. */
-function slugify(value: string): string {
+export function slugify(value: string): string {
   return value
     .toLowerCase()
     .normalize('NFKD')

@@ -18,7 +18,6 @@ import { BookingModule } from './modules/booking/booking.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CouponModule } from './modules/coupon/coupon.module';
-import { PlanModule } from './modules/plan/plan.module';
 import { FavouriteModule } from './modules/favourite/favourite.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
@@ -68,7 +67,6 @@ import { PrismaModule } from './prisma/prisma.module';
     AdminUserModule,
     DashboardModule,
     CouponModule,
-    PlanModule,
     FavouriteModule,
     ReportsModule,
     ServiceabilityModule,

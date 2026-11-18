@@ -12,7 +12,6 @@
 export type Offering = {
   id: string;
   level: string;
-  customPrice: unknown;
   service: {
     id: string;
     name: string;
@@ -37,9 +36,9 @@ export type CardRow = {
   instructorServices: unknown;
 };
 
-/** The price a customer would actually pay: the provider's, else the service's. */
+/** The price a customer pays: one rate per service, set by the admin. */
 export const priceOf = (offering: Offering): number =>
-  Number(offering.customPrice ?? offering.service.basePrice);
+  Number(offering.service.basePrice);
 
 export function toProviderCard(row: CardRow) {
   const offerings = row.instructorServices as unknown as Offering[];

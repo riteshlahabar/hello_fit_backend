@@ -17,6 +17,19 @@ export class CatalogController {
     return { data: await this.catalog.listCategories() };
   }
 
+  /**
+   * The package list behind the website's Package page. Public for the same
+   * reason the catalog is: a visitor compares terms before signing in.
+   *
+   * `serviceId` is optional — without it a package carries its terms and its
+   * percentage but no price, because the rate it applies to is the service's.
+   */
+  @Public()
+  @Get('packages')
+  async packages(@Query('serviceId', new ParseUUIDPipe({ optional: true })) serviceId?: string) {
+    return { data: await this.catalog.listPackages(serviceId) };
+  }
+
   @Public()
   @Get('services')
   async services(

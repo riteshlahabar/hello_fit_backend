@@ -57,8 +57,8 @@ export class SearchProvidersQueryDto {
 
   /**
    * Sidebar "Price per session", which reads "Up to ₹X" — so this is a
-   * ceiling, matched against the provider's own `customPrice` where they set
-   * one and the service's `basePrice` where they did not.
+   * ceiling, matched against the service's `basePrice`. There is one rate per
+   * service: providers stopped setting their own on 17 Nov 2026.
    */
   @IsOptional()
   @Type(() => Number)

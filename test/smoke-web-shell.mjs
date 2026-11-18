@@ -22,7 +22,7 @@ const PAGES = [
   '/', '/find-a-trainer', '/trainer-profile', '/booking', '/checkout',
   '/booking-confirmed', '/login', '/dashboard', '/my-bookings', '/profile',
   '/notifications', '/reviews', '/help', '/support-tickets', '/refunds',
-  '/billing', '/plans', '/goals', '/saved-trainers',
+  '/billing', '/packages', '/goals', '/saved-trainers',
   '/session-details', '/workout-history', '/workout-plans',
   '/privacy-policy', '/terms-conditions',
 ];
@@ -31,7 +31,7 @@ const PAGES = [
 const MENU = [
   ['Home', '/'],
   ['Explore Fitness', '/#categories'],
-  ['Plans', '/plans'],
+  ['Packages', '/packages'],
   ['Find a Trainer', '/find-a-trainer'],
   ['How It Works', '/#how'],
   ['About Us', '/#about-hellofit'],

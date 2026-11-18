@@ -12,6 +12,7 @@ const context = {
   instructorId: 'inst-1',
   serviceId: 'svc-1',
   categoryId: 'cat-1',
+  trainerCategoryId: 'band-1',
   on: new Date('2026-11-01'),
 };
 

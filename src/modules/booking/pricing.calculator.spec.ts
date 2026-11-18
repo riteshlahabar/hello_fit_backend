@@ -109,19 +109,46 @@ describe('quote', () => {
     expect(result.payable).toBe(0);
   });
 
-  it('charges nothing when a membership covers the session', () => {
+  it('multiplies by head count — the rate is per person', () => {
+    const result = quote(
+      { unitPrice: 600, sessionCount: 2, participantCount: 3, addons: [] },
+      policy,
+    );
+
+    expect(result.baseAmount).toBe(3600);
+    expect(result.grossAmount).toBe(3600);
+  });
+
+  it('marks up on a positive percent and discounts on a negative one', () => {
+    const trial = quote(
+      { unitPrice: 600, sessionCount: 1, percentAdjust: 20, addons: [] },
+      policy,
+    );
+    const intensive = quote(
+      { unitPrice: 600, sessionCount: 10, percentAdjust: -15, addons: [] },
+      policy,
+    );
+
+    expect(trial.percentAmount).toBe(120);
+    expect(trial.grossAmount).toBe(720);
+    expect(intensive.percentAmount).toBe(-900);
+    expect(intensive.grossAmount).toBe(5100);
+  });
+
+  it('applies the percent to the head-count gross, not the unit rate', () => {
     const result = quote(
       {
         unitPrice: 600,
         sessionCount: 1,
+        participantCount: 5,
+        percentAdjust: -30,
         addons: [],
-        isMembershipCovered: true,
       },
       policy,
     );
 
-    expect(result.grossAmount).toBe(0);
-    expect(result.payable).toBe(0);
+    expect(result.baseAmount).toBe(3000);
+    expect(result.grossAmount).toBe(2100);
   });
 
   it('does not drift on prices that are awkward in binary floating point', () => {
@@ -142,12 +169,30 @@ describe('quote', () => {
     expect(() =>
       quote({ unitPrice: -1, sessionCount: 1, addons: [] }, policy),
     ).toThrow('unitPrice cannot be negative');
+
+    expect(() =>
+      quote(
+        { unitPrice: 500, sessionCount: 1, participantCount: 0, addons: [] },
+        policy,
+      ),
+    ).toThrow('participantCount must be at least 1');
+
+    expect(() =>
+      quote(
+        { unitPrice: 500, sessionCount: 1, percentAdjust: -120, addons: [] },
+        policy,
+      ),
+    ).toThrow('percentAdjust cannot be below -100');
   });
 });
 
 describe('splitSessionValues', () => {
   it('splits evenly when it divides cleanly', () => {
     expect(splitSessionValues(600, 3)).toEqual([200, 200, 200]);
+  });
+
+  it('appends free sessions at zero', () => {
+    expect(splitSessionValues(600, 1, 1)).toEqual([600, 0]);
   });
 
   it('puts the rounding remainder on the first session and still sums exactly', () => {

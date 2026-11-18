@@ -137,7 +137,12 @@ s.check(
 s.section('every dead link on both pages is now a route');
 
 s.check('billing: support is a link', billing.includes('href="/support-tickets"'), true);
-s.check('billing: plans is a link', billing.includes('href="/plans"'), true);
+// The membership half of the page went with membership plans (17 Nov 2026):
+// `GET /plans/mine` no longer exists, so the two cards that read it are gone
+// and nothing on the page offers a plan to choose.
+s.check('billing: no membership card', billing.includes('Your current membership'), false);
+s.check('billing: no membership summary', billing.includes('Membership summary'), false);
+s.check('billing: no plans link', billing.includes('href="/plans"'), false);
 s.check('refunds: help is a link', refunds.includes('href="/help"'), true);
 s.check('billing: no #footer left', billing.includes('href="#footer"'), false);
 s.check('refunds: no #footer left', refunds.includes('href="#footer"'), false);

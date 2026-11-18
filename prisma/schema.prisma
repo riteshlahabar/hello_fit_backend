@@ -182,15 +182,11 @@ model CustomerProfile {
   referredById String?   @map("referred_by_id") @db.Uuid
   isBlocked    Boolean   @default(false) @map("is_blocked")
   blockReason  String?   @map("block_reason") @db.Text
-  /// The membership tier this customer chose on the website. Nothing is
-  /// charged for it — see the Plan model.
-  planId       String?   @map("plan_id") @db.Uuid
 
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   referredBy CustomerProfile?  @relation("Referral", fields: [referredById], references: [id], onDelete: SetNull)
   referrals  CustomerProfile[] @relation("Referral")
   addresses  Address[]
-  plan       Plan?             @relation(fields: [planId], references: [id], onDelete: SetNull)
   favourites Favourite[]
 
   createdAt     DateTime       @default(now()) @map("created_at")
@@ -224,6 +220,8 @@ model InstructorProfile {
   homeBaseLat      Decimal?         @map("home_base_lat") @db.Decimal(10, 7)
   homeBaseLng      Decimal?         @map("home_base_lng") @db.Decimal(10, 7)
   travelRadiusKm   Int              @default(10) @map("travel_radius_km")
+  /// Basic / Standard / Premium / Elite. Decides the commission, not the rate.
+  trainerCategoryId String?         @map("trainer_category_id") @db.Uuid
   branchId         String?          @map("branch_id") @db.Uuid
   dailySessionCap  Int              @default(4) @map("daily_session_cap")
   /// Minutes blocked either side of a session so travel never double-books.
@@ -240,7 +238,8 @@ model InstructorProfile {
   codeOfConductAt  DateTime?        @map("code_of_conduct_accepted_at")
   joinedAt         DateTime?        @map("joined_at")
 
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainerCategory TrainerCategory? @relation(fields: [trainerCategoryId], references: [id], onDelete: SetNull)
   branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
   createdAt              DateTime                @default(now()) @map("created_at")
@@ -652,7 +651,6 @@ enum ServiceLevel {
 enum BookingType {
   SINGLE
   PACKAGE
-  MEMBERSHIP
 }
 
 enum PaymentStatus {
@@ -753,8 +751,18 @@ model Service {
   name            String       @db.VarChar(160)
   slug            String       @unique @db.VarChar(160)
   durationMin     Int          @map("duration_min")
+  /// The rate for ONE session for ONE person. Admin sets it; providers do not
+  /// (client, 17 Nov 2026 — state/pricing-rules.md). Everything else is a
+  /// percentage on top: `gross = basePrice x persons x sessions`.
   basePrice       Decimal      @map("base_price") @db.Decimal(10, 2)
   level           ServiceLevel @default(ALL_LEVELS)
+  /// Which of the two percentage systems this service uses, and only one ever
+  /// applies. False: the customer picks a Package and persons stay at 1.
+  /// True: the customer picks a group size and GroupSlab applies instead; the
+  /// package dropdown is hidden. The two never meet, so no precedence rule is
+  /// needed and the admin can always predict the price.
+  allowMultiPerson Boolean     @default(false) @map("allow_multi_person")
+  /// Ceiling on the group-size dropdown. Only read when allowMultiPerson.
   maxParticipants Int          @default(1) @map("max_participants")
   equipment       String?      @db.Text
   description     String?      @db.Text
@@ -768,7 +776,6 @@ model Service {
 
   category           ServiceCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   instructorServices InstructorService[]
-  packages           Package[]
   bookings           Booking[]
   sessions           BookingSession[]
   commissionRules    CommissionRule[]
@@ -781,14 +788,17 @@ model Service {
   @@map("services")
 }
 
-/// The rate card and skill map: which teacher offers which service, and at
-/// what price if it differs from the service base price (spec 7.2).
+/// The skill map: which provider offers which service.
+///
+/// It used to carry a `customPrice` as well. The client removed provider-set
+/// pricing on 17 Nov 2026 — admin sets every rate on `Service.basePrice` — so
+/// the column is gone and the price shown in search is now, by construction,
+/// the price charged at checkout.
 model InstructorService {
   id           String       @id @default(uuid()) @db.Uuid
   instructorId String       @map("instructor_id") @db.Uuid
   serviceId    String       @map("service_id") @db.Uuid
   level        ServiceLevel @default(ALL_LEVELS)
-  customPrice  Decimal?     @map("custom_price") @db.Decimal(10, 2)
   isActive     Boolean      @default(true) @map("is_active")
   /// Teacher-requested changes wait for Teacher Manager approval (spec 6.3).
   approvedAt   DateTime?    @map("approved_at")
@@ -823,27 +833,92 @@ model InstructorServiceArea {
   @@map("instructor_service_areas")
 }
 
+/// A session-count offer — the six rows of the client's pricing sheet: trial,
+/// weekly, monthly, monthly intensive, and the two 90-day plans.
+///
+/// **Global, not per service** (client, 17 Nov 2026). It used to hang off one
+/// `serviceId` and carry a hand-typed `price`, which meant ten services x six
+/// offers = sixty rows an admin had to keep in step. Now there are six rows,
+/// and the price is derived: `Service.basePrice x persons x sessionCount`,
+/// then `percentAdjust`.
 model Package {
   id                     String  @id @default(uuid()) @db.Uuid
-  serviceId              String  @map("service_id") @db.Uuid
   name                   String  @db.VarChar(160)
+  /// The symbol on the package card — an emoji or a glyph the admin types,
+  /// as `MembershipPlan.icon` carried before plans were deleted. Null falls
+  /// back to the card's default mark; this is decoration, never meaning.
+  icon                   String? @db.VarChar(16)
   sessionCount           Int     @map("session_count")
   validityDays           Int     @map("validity_days")
-  price                  Decimal @db.Decimal(10, 2)
+  /// Signed percentage on the gross: +20 is the trial markup, -15 the 90-day
+  /// intensive discount, 0 the monthly intensive. Never hard-coded anywhere —
+  /// the admin types it.
+  percentAdjust          Decimal @default(0) @map("percent_adjust") @db.Decimal(5, 2)
+  /// Sessions delivered on top of `sessionCount` at no charge, and NOT paid to
+  /// the provider either (the trial is 1 paid + 1 free).
+  freeSessionCount       Int     @default(0) @map("free_session_count")
   /// 0 = Sunday to 6 = Saturday. Empty means any weekday.
   allowedWeekdays        Int[]   @map("allowed_weekdays")
   fixedInstructorAllowed Boolean @default(true) @map("fixed_instructor_allowed")
+  sortOrder              Int     @default(0) @map("sort_order")
   isActive               Boolean @default(true) @map("is_active")
 
-  service  Service   @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   bookings Booking[]
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  @@index([serviceId, isActive])
+  @@index([isActive, sortOrder])
   @@map("packages")
+}
+
+/// Group-size discount, the other half of the pricing sheet: 3 people -20%,
+/// 5 people -30%, 10 people -50%.
+///
+/// Only read when the booked service has `allowMultiPerson`. The customer's
+/// group-size dropdown runs 1 to `Service.maxParticipants`, so most sizes have
+/// no row of their own: a size falls back to the highest `minPersons` at or
+/// below it, and a size below every row gets no discount.
+model GroupSlab {
+  id         String  @id @default(uuid()) @db.Uuid
+  /// Smallest group this row applies to. Unique: two rows for the same size
+  /// would make the discount depend on row order.
+  minPersons Int     @unique @map("min_persons")
+  /// Percent off the gross. Positive means cheaper.
+  percentOff Decimal @map("percent_off") @db.Decimal(5, 2)
+  isActive   Boolean @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([isActive, minPersons])
+  @@map("group_slabs")
+}
+
+/// Basic / Standard / Premium / Elite — the band a provider sits in.
+///
+/// It carries no price: the rate lives on `Service.basePrice` and is the same
+/// whoever delivers the session. What the band decides is the **commission**,
+/// through a `CommissionRule` with scope `TRAINER_CATEGORY`. One row then
+/// covers every provider in the band, and a per-provider rule overrides it
+/// only for a special deal.
+model TrainerCategory {
+  id        String @id @default(uuid()) @db.Uuid
+  name      String @unique @db.VarChar(60)
+  sortOrder Int    @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  instructors     InstructorProfile[]
+  commissionRules CommissionRule[]
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([isActive, sortOrder])
+  @@map("trainer_categories")
 }
 
 model Addon {
@@ -968,6 +1043,10 @@ model Booking {
   addressId     String        @map("address_id") @db.Uuid
   type          BookingType   @default(SINGLE)
   sessionCount  Int           @default(1) @map("session_count")
+  /// People attending each session. The rate is per person, so this multiplies
+  /// the gross; above 1 it also selects the GroupSlab. Only a service with
+  /// `allowMultiPerson` may exceed 1.
+  participantCount Int        @default(1) @map("participant_count")
   grossAmount   Decimal       @map("gross_amount") @db.Decimal(10, 2)
   discount      Decimal       @default(0) @db.Decimal(10, 2)
   travelCharge  Decimal       @default(0) @map("travel_charge") @db.Decimal(10, 2)
@@ -1302,6 +1381,7 @@ enum CommissionScope {
   GLOBAL
   CATEGORY
   SERVICE
+  TRAINER_CATEGORY
   INSTRUCTOR
 }
 
@@ -1445,6 +1525,8 @@ model CommissionRule {
   scope         CommissionScope
   categoryId    String?         @map("category_id") @db.Uuid
   serviceId     String?         @map("service_id") @db.Uuid
+  /// Set when scope is TRAINER_CATEGORY — the normal way to set commission.
+  trainerCategoryId String?     @map("trainer_category_id") @db.Uuid
   instructorId  String?         @map("instructor_id") @db.Uuid
   type          CommissionType  @default(PERCENT)
   value         Decimal         @db.Decimal(10, 2)
@@ -1453,8 +1535,9 @@ model CommissionRule {
   isActive      Boolean         @default(true) @map("is_active")
   createdById   String?         @map("created_by_id") @db.Uuid
 
-  service    Service?           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  instructor InstructorProfile? @relation(fields: [instructorId], references: [id], onDelete: Cascade)
+  service         Service?           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  trainerCategory TrainerCategory?   @relation(fields: [trainerCategoryId], references: [id], onDelete: Cascade)
+  instructor      InstructorProfile? @relation(fields: [instructorId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -1953,71 +2036,6 @@ model NotificationPreference {
 
   @@unique([userId, channel, eventKey])
   @@map("notification_preferences")
-}
-
-/// A membership tier the customer can choose — the website's Plans page.
-///
-/// Added 13 Nov 2026 on the client's instruction. **It is not in the v3 PDF**
-/// (see state/open-points.md); the page was supplied as a design
-/// (`hellofit-membership-plans-subscription.html`) and asked for.
-///
-/// "Plan" is the only word used. Membership and Subscription mean the same
-/// thing and were deliberately dropped so three names cannot drift apart.
-///
-/// **Choosing a plan charges nothing.** There is no gateway subscription, no
-/// renewal and no expiry — `CustomerProfile.planId` records the choice and
-/// that is all it does. If billing is ever wanted it is separate work.
-model Plan {
-  id          String  @id @default(uuid()) @db.Uuid
-  name        String  @db.VarChar(60)
-  slug        String  @unique @db.VarChar(60)
-  /// The card's emoji badge, e.g. 🌱 / 🔥 / 👑.
-  icon        String? @db.VarChar(8)
-  /// The small line above the name — "Start strong", "Build momentum".
-  eyebrow     String? @db.VarChar(60)
-  description String? @db.VarChar(255)
-  /// Rupees per month. 0 is a real value: the demo's Starter tier is free.
-  priceMonthly Decimal @default(0) @map("price_monthly") @db.Decimal(10, 2)
-  /// Rupees per month when billed yearly. The design's annual toggle reads it.
-  priceYearly  Decimal @default(0) @map("price_yearly") @db.Decimal(10, 2)
-  /// "Billed monthly · Cancel anytime", or "No membership fee".
-  billingCaption String? @map("billing_caption") @db.VarChar(120)
-  /// The MOST POPULAR ribbon. At most one plan may carry it — enforced in the
-  /// service, not here, because a partial unique index cannot say "at most one
-  /// row where true" portably.
-  isPopular   Boolean @default(false) @map("is_popular")
-  /// Left-to-right order of the cards.
-  sortOrder   Int     @default(0) @map("sort_order")
-  isActive    Boolean @default(true) @map("is_active")
-
-  features  PlanFeature[]
-  customers CustomerProfile[]
-
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  @@index([isActive, sortOrder])
-  @@map("plans")
-}
-
-/// One ✓ or – line in a plan card's "what's included" list.
-model PlanFeature {
-  id        String  @id @default(uuid()) @db.Uuid
-  planId    String  @map("plan_id") @db.Uuid
-  label     String  @db.VarChar(120)
-  /// ✓ when true, – when false. A struck-through line is as much a part of the
-  /// design as a ticked one: it is how a tier shows what it does not give you.
-  included  Boolean @default(true)
-  sortOrder Int     @default(0) @map("sort_order")
-
-  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([planId, sortOrder])
-  @@map("plan_features")
 }
 
 /// A trainer a customer saved — the website's Saved Trainers page.

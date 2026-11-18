@@ -305,6 +305,13 @@ export class SessionService {
       select: { categoryId: true },
     });
 
+    // The provider's band decides the commission unless a per-provider rule
+    // overrides it (client, 17 Nov 2026 — state/pricing-rules.md).
+    const provider = await this.prisma.instructorProfile.findUniqueOrThrow({
+      where: { id: params.instructorId },
+      select: { trainerCategoryId: true },
+    });
+
     const rules = await this.prisma.commissionRule.findMany({
       where: { isActive: true, deletedAt: null },
     });
@@ -316,6 +323,7 @@ export class SessionService {
           scope: r.scope,
           categoryId: r.categoryId,
           serviceId: r.serviceId,
+          trainerCategoryId: r.trainerCategoryId,
           instructorId: r.instructorId,
           type: r.type,
           value: Number(r.value),
@@ -328,6 +336,7 @@ export class SessionService {
         instructorId: params.instructorId,
         serviceId: params.session.serviceId,
         categoryId: service.categoryId,
+        trainerCategoryId: provider.trainerCategoryId,
         on: params.completedAt,
       },
     );

@@ -25,7 +25,6 @@ const CARD_SELECT = {
     select: {
       id: true,
       level: true,
-      customPrice: true,
       service: {
         select: {
           id: true,
