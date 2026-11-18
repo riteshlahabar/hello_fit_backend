@@ -16,6 +16,12 @@ const s = smoke();
 const stamp = String(Date.now()).slice(-6);
 
 let madeId = '';
+// The package is sold on a service (client, 18 Nov 2026): a package with no
+// service ticked is shown nowhere, so the fixture picks one up front.
+const services = await s.call('GET', '/services', undefined, 200, 'none');
+const target = (services?.data ?? [])[0];
+s.check('a service exists to sell against', Boolean(target), true);
+
 
 s.section('an administered package reaches the website');
 
@@ -31,6 +37,7 @@ await s.withAdmin(async () => {
       percentAdjust: -17,
       freeSessionCount: 2,
       sortOrder: 50,
+      serviceIds: [target.id],
     },
     201,
   );
@@ -68,21 +75,19 @@ s.section('the service picker prices the cards');
 
 // Picked by slug in the URL so the page stays server-rendered: the prices
 // come from the API, never from arithmetic in the browser.
-const services = await s.call('GET', '/services', undefined, 200, 'none');
-const solo = (services?.data ?? []).find((row) => !row.allowMultiPerson);
-const rate = Number(solo?.basePrice ?? 0);
+const rate = Number(target?.basePrice ?? 0);
 
-s.check('a solo service exists to price against', rate > 0, true);
+s.check("the service carries a rate to price against", rate > 0, true);
 s.check('the picker is on the page', html.includes('service-picker'), true);
 s.check('no rupee total before a service is picked', html.includes('for 12 sessions'), false);
 
-const priced = await fetch(`${SITE}/packages?service=${solo.slug}`).then((r) =>
+const priced = await fetch(`${SITE}/packages?service=${target.slug}`).then((r) =>
   r.text(),
 );
 // 12 sessions at the service rate, less the package's 17%.
 const total = Math.round(rate * 12 * 0.83).toLocaleString('en-IN');
 
-s.check('the picked service is named', priced.includes(`Priced for ${solo.name}`), true);
+s.check('the picked service is named', priced.includes(`Priced for ${target.name}`), true);
 s.check('the card carries the worked total', priced.includes(`₹${total}`), true);
 s.check('the per-session figure is there', priced.includes('per session'), true);
 

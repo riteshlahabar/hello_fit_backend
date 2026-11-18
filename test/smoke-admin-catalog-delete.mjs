@@ -1,6 +1,6 @@
 /**
- * Deleting catalogue rows — DELETE on categories, services, packages and
- * group slabs (client instruction, 18 Nov 2026).
+ * Deleting catalogue rows — DELETE on categories, services and packages
+ * (client instruction, 18 Nov 2026).
  *
  * The rule the client set: **hard delete, but refuse when anything points at
  * the row and say what is holding it.** So the refusals carry the weight
@@ -17,7 +17,6 @@ const leftovers = {
   services: [],
   categories: [],
   packages: [],
-  slabs: [],
   links: [],
 };
 let linkedCategoryId = '';
@@ -120,15 +119,6 @@ await s.withAdmin(async () => {
   leftovers.packages.pop();
   const packs = await s.call('GET', '/admin/packages?includeInactive=true&q=Del Pack');
   s.check('package gone from the list', (packs?.data ?? []).length, 0);
-
-  s.section('a group slab always deletes — nothing stores one');
-  const slab = await s.call('POST', '/admin/group-slabs', { minPersons: 177, percentOff: 12 }, 201);
-  const slabId = slab?.data?.id ?? '';
-  leftovers.slabs.push(slabId);
-
-  await s.call('DELETE', `/admin/group-slabs/${slabId}`, undefined, 200);
-  leftovers.slabs.pop();
-  await s.call('DELETE', `/admin/group-slabs/${slabId}`, undefined, 404);
 });
 
 s.section('delete needs a token');
@@ -139,7 +129,6 @@ await s.cleanup(async (db) => {
   await db.service.deleteMany({ where: { id: { in: leftovers.services } } });
   await db.serviceCategory.deleteMany({ where: { id: { in: leftovers.categories } } });
   await db.package.deleteMany({ where: { id: { in: leftovers.packages } } });
-  await db.groupSlab.deleteMany({ where: { id: { in: leftovers.slabs } } });
 });
 
 s.done();

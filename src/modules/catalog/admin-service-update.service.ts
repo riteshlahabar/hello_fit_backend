@@ -7,7 +7,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ErrorCode } from '../../common/errors/error-codes';
 import { slugify, type AdminActor } from './admin-catalog.service';
-import { resolveMaxParticipants } from './service-rules';
 import type { UpdateServiceDto } from './dto/admin-service-update.dto';
 
 /**
@@ -15,8 +14,7 @@ import type { UpdateServiceDto } from './dto/admin-service-update.dto';
  *
  * **Past the PDF on purpose**, as the create route is: §4.5 gives the
  * provider its service's wording. The client asked for Edit right after Add,
- * because without it no admin can change a catalogue row — `allowMultiPerson`
- * included, which decides package versus slab pricing.
+ * because without it no admin can change a catalogue row.
  * → `state/scope-documents.md`
  *
  * Its own class so `AdminCatalogService` (categories, visibility) and
@@ -41,8 +39,6 @@ export class AdminServiceUpdateService {
     const slug = dto.name ? slugify(dto.name) : undefined;
     if (slug && slug !== service.slug) await this.assertSlugFree(slug, id);
 
-    const allowMultiPerson = dto.allowMultiPerson ?? service.allowMultiPerson;
-
     const updated = await this.prisma.service.update({
       where: { id },
       data: {
@@ -51,26 +47,15 @@ export class AdminServiceUpdateService {
         ...(slug !== undefined && { slug }),
         ...(dto.basePrice !== undefined && { basePrice: dto.basePrice }),
         ...(dto.durationMin !== undefined && { durationMin: dto.durationMin }),
-        ...(dto.level !== undefined && { level: dto.level }),
         ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.inclusions !== undefined && { inclusions: dto.inclusions }),
         ...(dto.equipment !== undefined && { equipment: dto.equipment }),
         ...(dto.instructions !== undefined && {
           instructions: dto.instructions,
-        }),
-        ...(dto.isHomeService !== undefined && {
-          isHomeService: dto.isHomeService,
         }),
         ...(dto.allowExtension !== undefined && {
           allowExtension: dto.allowExtension,
         }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
-        allowMultiPerson,
-        maxParticipants: resolveMaxParticipants(
-          allowMultiPerson,
-          dto.maxParticipants,
-          service.maxParticipants,
-        ),
       },
       include: {
         category: { select: { id: true, name: true, isActive: true } },
@@ -87,16 +72,12 @@ export class AdminServiceUpdateService {
         slug: service.slug,
         categoryId: service.categoryId,
         basePrice: Number(service.basePrice),
-        allowMultiPerson: service.allowMultiPerson,
-        maxParticipants: service.maxParticipants,
       },
       after: {
         name: updated.name,
         slug: updated.slug,
         categoryId: updated.categoryId,
         basePrice: Number(updated.basePrice),
-        allowMultiPerson: updated.allowMultiPerson,
-        maxParticipants: updated.maxParticipants,
       },
       ipAddress: actor.ipAddress,
       requestId: actor.requestId,
@@ -116,8 +97,6 @@ export class AdminServiceUpdateService {
         slug: true,
         categoryId: true,
         basePrice: true,
-        allowMultiPerson: true,
-        maxParticipants: true,
       },
     });
 

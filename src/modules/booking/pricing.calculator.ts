@@ -6,10 +6,9 @@ import type { PaymentPolicy } from '../settings/settings.defaults';
  *   gross = basePrice x participants x sessions, then ONE percent
  *   payable = gross + add-ons + travel - discount + tax - wallet
  *
- * The percent is either the package's `percentAdjust` or the group slab's
- * `percentOff`, never both: `Service.allowMultiPerson` decides which system a
- * service uses, so the caller resolves a single signed figure and passes it
- * here. See `state/pricing-rules.md`.
+ * The percent is the package's `percentAdjust` — the only discount there is
+ * since 18 Nov 2026 — and the caller passes a single signed figure here.
+ * See `state/pricing-rules.md`.
  *
  * Money is handled in paise as integers throughout, then converted once at
  * the edge. Floating-point rupees drift: 0.1 + 0.2 !== 0.3, and a few paise

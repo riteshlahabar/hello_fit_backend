@@ -1,9 +1,16 @@
 /**
- * Package and group pricing (client pricing doc, 17 Nov 2026).
+ * Package pricing (client pricing doc 17 Nov 2026, reshaped 18 Nov).
  *
- * Proves the two systems never meet: a solo service prices by package
- * percent with one person, a group service prices by slab with no package.
- * Packages are global now, so one package row serves both services.
+ * One money rule and one discount: `basePrice x persons x sessionCount`, then
+ * the package's percent. The package carries both the session count and the
+ * head count and names the services it is sold on, so this proves:
+ *
+ *   * a service offers only its own packages;
+ *   * a group deal is a package with `persons` above 1;
+ *   * no package means one person, one session, full price;
+ *   * a package not sold on the service is refused.
+ *
+ *     npm run smoke:pricing
  */
 import { smoke } from './smoke-harness.mjs';
 
@@ -15,29 +22,19 @@ const fixture = await s.cleanup(async (db) => {
     data: { name: `Cat ${tag}`, slug: `cat-${tag}` },
   });
 
-  const solo = await db.service.create({
-    data: {
-      categoryId: category.id,
-      name: `Solo ${tag}`,
-      slug: `solo-${tag}`,
-      durationMin: 60,
-      basePrice: 600,
-      allowMultiPerson: false,
-      maxParticipants: 1,
-    },
-  });
+  const service = (name) =>
+    db.service.create({
+      data: {
+        categoryId: category.id,
+        name: `${name} ${tag}`,
+        slug: `${name.toLowerCase()}-${tag}`,
+        durationMin: 60,
+        basePrice: 600,
+      },
+    });
 
-  const group = await db.service.create({
-    data: {
-      categoryId: category.id,
-      name: `Group ${tag}`,
-      slug: `group-${tag}`,
-      durationMin: 60,
-      basePrice: 600,
-      allowMultiPerson: true,
-      maxParticipants: 10,
-    },
-  });
+  const yoga = await service('Yoga');
+  const gym = await service('Gym');
 
   const monthly = await db.package.create({
     data: {
@@ -46,6 +43,7 @@ const fixture = await s.cleanup(async (db) => {
       validityDays: 30,
       percentAdjust: -15,
       allowedWeekdays: [],
+      services: { create: [{ serviceId: yoga.id }] },
     },
   });
 
@@ -57,64 +55,67 @@ const fixture = await s.cleanup(async (db) => {
       percentAdjust: 20,
       freeSessionCount: 1,
       allowedWeekdays: [],
+      services: { create: [{ serviceId: yoga.id }] },
     },
   });
 
-  // The seed ships 3 / 5 / 10 and `minPersons` is unique, so a plain create
-  // collides on a seeded database. Reuse the row when it is already there and
-  // let cleanup drop only what this run made.
-  const slabs = [];
+  // What GroupSlab used to do: five people, 30% off, as one package row.
+  const group = await db.package.create({
+    data: {
+      name: `Group of 5 ${tag}`,
+      sessionCount: 1,
+      persons: 5,
+      validityDays: 30,
+      percentAdjust: -30,
+      allowedWeekdays: [],
+      services: { create: [{ serviceId: yoga.id }] },
+    },
+  });
 
-  for (const data of [
-    { minPersons: 3, percentOff: 20 },
-    { minPersons: 5, percentOff: 30 },
-  ]) {
-    const seeded = await db.groupSlab.findUnique({
-      where: { minPersons: data.minPersons },
-    });
+  const gymOnly = await db.package.create({
+    data: {
+      name: `GymOnly ${tag}`,
+      sessionCount: 5,
+      validityDays: 7,
+      percentAdjust: 0,
+      allowedWeekdays: [],
+      services: { create: [{ serviceId: gym.id }] },
+    },
+  });
 
-    slabs.push(seeded ?? { ...(await db.groupSlab.create({ data })), mine: true });
-  }
-
-  return { category, solo, group, monthly, trial, slabs };
+  return { category, yoga, gym, monthly, trial, group, gymOnly };
 });
 
-await s.loginCustomer();
-
-s.section('service detail derives package prices');
+s.section('the service detail screen offers only its own packages');
 const detail = await s.call(
   'GET',
-  `/services/${fixture.solo.id}`,
+  `/services/${fixture.yoga.id}`,
   undefined,
   200,
   'none',
 );
-const monthlyOption = detail?.data?.packages?.find(
-  (row) => row.id === fixture.monthly.id,
-);
-s.check('monthly price is 600 x 10 less 15%', monthlyOption?.price, 5100);
+const offered = detail?.data?.packages ?? [];
+s.check('three packages on yoga', offered.length, 3);
+
+const monthlyOption = offered.find((row) => row.id === fixture.monthly.id);
+s.check('monthly price is 600 x 1 x 10 less 15%', monthlyOption?.price, 5100);
 s.check('per-session price', monthlyOption?.perSessionPrice, 510);
-s.check('solo service offers no slabs', detail?.data?.groupSlabs?.length, 0);
 
-const groupDetail = await s.call(
-  'GET',
-  `/services/${fixture.group.id}`,
-  undefined,
-  200,
-  'none',
-);
-s.check('group service hides packages', groupDetail?.data?.packages?.length, 0);
+const groupOption = offered.find((row) => row.id === fixture.group.id);
+s.check('five people at 30% off is 2100', groupOption?.price, 2100);
+s.check('head count comes with it', groupOption?.persons, 5);
+
 s.check(
-  'group service offers slabs',
-  groupDetail?.data?.groupSlabs?.length >= 2,
-  true,
+  "the gym package is not on yoga",
+  offered.some((row) => row.id === fixture.gymOnly.id),
+  false,
 );
 
-s.section('quote applies one percent, never two');
+s.section('the quote applies the package percent');
 const pkgQuote = await s.call(
   'POST',
   '/app/customer/bookings/quote',
-  { serviceId: fixture.solo.id, packageId: fixture.monthly.id },
+  { serviceId: fixture.yoga.id, packageId: fixture.monthly.id },
   201,
   'customer',
 );
@@ -125,7 +126,7 @@ s.check('package head count', pkgQuote?.data?.participantCount, 1);
 const trialQuote = await s.call(
   'POST',
   '/app/customer/bookings/quote',
-  { serviceId: fixture.solo.id, packageId: fixture.trial.id },
+  { serviceId: fixture.yoga.id, packageId: fixture.trial.id },
   201,
   'customer',
 );
@@ -135,70 +136,75 @@ s.check('trial throws in one free session', trialQuote?.data?.freeSessionCount, 
 const groupQuote = await s.call(
   'POST',
   '/app/customer/bookings/quote',
-  { serviceId: fixture.group.id, participantCount: 5 },
+  { serviceId: fixture.yoga.id, packageId: fixture.group.id },
   201,
   'customer',
 );
 s.check('five people at 30% off', groupQuote?.data?.grossAmount, 2100);
-s.check('slab percent is signed', groupQuote?.data?.percentAdjust, -30);
+s.check('head count from the package', groupQuote?.data?.participantCount, 5);
+s.check('percent is signed', groupQuote?.data?.percentAdjust, -30);
 
-const belowSlab = await s.call(
+s.section('no package means one person, one session, full price');
+const plain = await s.call(
   'POST',
   '/app/customer/bookings/quote',
-  { serviceId: fixture.group.id, participantCount: 2 },
+  { serviceId: fixture.yoga.id },
   201,
   'customer',
 );
-s.check('two people get no slab', belowSlab?.data?.grossAmount, 1200);
+s.check('plain gross', plain?.data?.grossAmount, 600);
+s.check('one person', plain?.data?.participantCount, 1);
 
-const betweenSlabs = await s.call(
+s.section('the head count belongs to the package');
+// A request may send it, but only the figure the package already carries.
+await s.call(
   'POST',
   '/app/customer/bookings/quote',
-  { serviceId: fixture.group.id, participantCount: 4 },
+  { serviceId: fixture.yoga.id, participantCount: 3 },
+  400,
+  'customer',
+);
+await s.call(
+  'POST',
+  '/app/customer/bookings/quote',
+  {
+    serviceId: fixture.yoga.id,
+    packageId: fixture.group.id,
+    participantCount: 3,
+  },
+  400,
+  'customer',
+);
+const agreeing = await s.call(
+  'POST',
+  '/app/customer/bookings/quote',
+  {
+    serviceId: fixture.yoga.id,
+    packageId: fixture.group.id,
+    participantCount: 5,
+  },
   201,
   'customer',
 );
-s.check('four people fall to the 3-person slab', betweenSlabs?.data?.grossAmount, 1920);
+s.check('the matching head count is accepted', agreeing?.data?.grossAmount, 2100);
 
-s.section('the systems are kept apart');
-await s.call(
+s.section('a package not sold on the service is refused');
+const wrong = await s.call(
   'POST',
   '/app/customer/bookings/quote',
-  { serviceId: fixture.solo.id, participantCount: 3 },
-  400,
+  { serviceId: fixture.yoga.id, packageId: fixture.gymOnly.id },
+  404,
   'customer',
 );
-await s.call(
-  'POST',
-  '/app/customer/bookings/quote',
-  { serviceId: fixture.group.id, packageId: fixture.monthly.id },
-  400,
-  'customer',
-);
-await s.call(
-  'POST',
-  '/app/customer/bookings/quote',
-  { serviceId: fixture.group.id, participantCount: 50 },
-  400,
-  'customer',
-);
+s.check('refused as not found', s.errorCode(wrong), 'NOT_FOUND');
 
 await s.noToken('POST', '/app/customer/bookings/quote', {
-  serviceId: fixture.solo.id,
+  serviceId: fixture.yoga.id,
 });
 
 await s.cleanup(async (db) => {
-  await db.groupSlab.deleteMany({
-    where: {
-      id: { in: fixture.slabs.filter((row) => row.mine).map((row) => row.id) },
-    },
-  });
-  await db.package.deleteMany({
-    where: { id: { in: [fixture.monthly.id, fixture.trial.id] } },
-  });
-  await db.service.deleteMany({
-    where: { id: { in: [fixture.solo.id, fixture.group.id] } },
-  });
+  await db.package.deleteMany({ where: { name: { endsWith: tag } } });
+  await db.service.deleteMany({ where: { slug: { endsWith: tag } } });
   await db.serviceCategory.delete({ where: { id: fixture.category.id } });
 });
 

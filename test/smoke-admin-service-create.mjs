@@ -4,8 +4,9 @@
  *
  * The route goes past PDF 4.5, which gives the provider its own services, so
  * the assertions pin what it may and may not do: it creates, it derives the
- * slug, it refuses a duplicate name, it holds the two pricing systems apart,
- * and it leaves the row ready for the edit route beside it.
+ * slug, it refuses a duplicate name, and the row it leaves is ready for the
+ * edit route beside it. A service carries no head count — `persons` lives on
+ * the Package since 18 Nov 2026.
  *
  *     npm run smoke:admin-service-create
  */
@@ -43,50 +44,8 @@ await s.withAdmin(async () => {
   made.push(solo?.data?.id);
   s.check('price leaves as a number', solo?.data?.basePrice, 600);
   s.check('slug derived from the name', solo?.data?.slug, `solo-service-${tag}`);
-  s.check('solo by default', solo?.data?.allowMultiPerson, false);
-  s.check('one person per session', solo?.data?.maxParticipants, 1);
   s.check('visible by default', solo?.data?.isActive, true);
   s.check('category comes back', solo?.data?.category?.id, categoryId);
-
-  s.section('create a group service');
-  const group = await s.call(
-    'POST',
-    '/admin/catalog/services',
-    {
-      categoryId,
-      name: `Group Service ${tag}`,
-      basePrice: 900,
-      durationMin: 45,
-      allowMultiPerson: true,
-      maxParticipants: 10,
-    },
-    201,
-  );
-  made.push(group?.data?.id);
-  s.check('group size kept', group?.data?.maxParticipants, 10);
-
-  s.section('the two pricing systems stay apart');
-  // A solo service takes one person; a group service that topped out at one
-  // could never reach a slab.
-  await s.call(
-    'POST',
-    '/admin/catalog/services',
-    { categoryId, name: `Bad A ${tag}`, basePrice: 500, durationMin: 60, maxParticipants: 4 },
-    400,
-  );
-  await s.call(
-    'POST',
-    '/admin/catalog/services',
-    {
-      categoryId,
-      name: `Bad B ${tag}`,
-      basePrice: 500,
-      durationMin: 60,
-      allowMultiPerson: true,
-      maxParticipants: 1,
-    },
-    400,
-  );
 
   s.section('create is validated');
   const clash = await s.call(

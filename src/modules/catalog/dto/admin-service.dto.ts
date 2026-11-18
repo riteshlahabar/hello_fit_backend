@@ -1,6 +1,5 @@
 import {
   IsBoolean,
-  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -11,7 +10,6 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { ServiceLevel } from '../../../generated/prisma/enums';
 
 /**
  * Creating a service from the admin panel (client instruction, 18 Nov 2026).
@@ -21,8 +19,8 @@ import { ServiceLevel } from '../../../generated/prisma/enums';
  * for the button anyway, the same way admin-only pricing overrode §4.5 on
  * 17 Nov. → `state/scope-documents.md`, `state/pricing-rules.md`
  *
- * The rate fields repeat `UpdateServicePricingDto` because a service cannot
- * exist without a price: `basePrice` is what every percent is applied to.
+ * A service carries no group fields: `persons` lives on the Package since
+ * 18 Nov 2026, and `basePrice` is what every package percent applies to.
  */
 export class CreateServiceDto {
   @IsUUID()
@@ -45,33 +43,9 @@ export class CreateServiceDto {
   durationMin!: number;
 
   @IsOptional()
-  @IsEnum(ServiceLevel)
-  level?: ServiceLevel;
-
-  /**
-   * Which percentage system the service uses. False: packages, one person.
-   * True: group slabs, no package. Never both — the service rejects a group
-   * size above `maxParticipants` and a package on a group service.
-   */
-  @IsOptional()
-  @IsBoolean()
-  allowMultiPerson?: boolean;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(200)
-  maxParticipants?: number;
-
-  @IsOptional()
   @IsString()
   @MaxLength(4000)
   description?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(4000)
-  inclusions?: string;
 
   @IsOptional()
   @IsString()
@@ -82,10 +56,6 @@ export class CreateServiceDto {
   @IsString()
   @MaxLength(4000)
   instructions?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isHomeService?: boolean;
 
   @IsOptional()
   @IsBoolean()

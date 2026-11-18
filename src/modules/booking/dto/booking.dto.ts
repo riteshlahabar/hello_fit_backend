@@ -36,9 +36,9 @@ export class QuoteBookingDto {
   sessionCount?: number;
 
   /**
-   * People attending each session. Only a service with `allowMultiPerson`
-   * may send more than 1; the service's own `maxParticipants` is the real
-   * ceiling, this is the outer sanity bound (client, 17 Nov 2026).
+   * People attending each session. It comes from the booked package, so the
+   * only value a request may send is the one the package already carries
+   * (client, 18 Nov 2026).
    */
   @IsOptional()
   @IsInt()

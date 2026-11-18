@@ -49,13 +49,7 @@ export class CatalogService {
         slug: true,
         durationMin: true,
         basePrice: true,
-        level: true,
-        maxParticipants: true,
-        isHomeService: true,
-        // The website's package picker lists only solo services: a group
-        // service prices by slab and `GET /packages?serviceId=` answers it
-        // with an empty list.
-        allowMultiPerson: true,
+        description: true,
         category: { select: { id: true, name: true, slug: true } },
       },
     });
@@ -64,8 +58,8 @@ export class CatalogService {
   /**
    * Service detail screen — includes everything shown before booking.
    *
-   * Packages are global since 17 Nov 2026 and carry a percentage, not a
-   * price, so the choices are derived here rather than read off the service.
+   * A package names the services it is sold on (client, 18 Nov 2026) and
+   * carries its own `persons`, so the prices are derived here.
    */
   async getService(id: string) {
     const service = await this.prisma.service.findFirst({
@@ -83,28 +77,27 @@ export class CatalogService {
     }
 
     const options = await this.pricingOptions.forService({
+      id: service.id,
       basePrice: Number(service.basePrice),
-      allowMultiPerson: service.allowMultiPerson,
-      maxParticipants: service.maxParticipants,
     });
 
-    return { ...service, packages: options.packages, groupSlabs: options.groupSlabs };
+    return { ...service, packages: options.packages };
   }
 
   /**
-   * Every live package, for the website's Package page (client, 17 Nov 2026 —
-   * the word "Plans" now means packages).
+   * The website's Package page (client, 17 Nov 2026 — the word "Plans" now
+   * means packages; reshaped 18 Nov).
    *
-   * A package is global and holds a percentage, so the list is the same for
-   * every service. `serviceId` is optional: give one and each row carries the
-   * worked price for that service's rate; leave it out and `price` is null.
+   * `serviceId` is optional. Give one and the list narrows to the packages
+   * that service is sold on, each carrying the worked price for its rate;
+   * leave it out and every live package comes back with `price` null.
    */
   async listPackages(serviceId?: string) {
     if (!serviceId) return this.pricingOptions.listPackages(null);
 
     const service = await this.prisma.service.findFirst({
       where: { id: serviceId, isActive: true, deletedAt: null },
-      select: { basePrice: true, allowMultiPerson: true },
+      select: { basePrice: true },
     });
 
     if (!service) {
@@ -114,12 +107,10 @@ export class CatalogService {
       });
     }
 
-    // A group service prices off slabs, never off a package — pricing-rules.md.
-    // Returning priced packages for one would offer a combination the booking
-    // endpoint rejects with a 400.
-    if (service.allowMultiPerson) return [];
-
-    return this.pricingOptions.listPackages(Number(service.basePrice));
+    return this.pricingOptions.listPackages(
+      Number(service.basePrice),
+      serviceId,
+    );
   }
 
   /** Add-ons offered for a service; an empty list on the add-on means "all". */

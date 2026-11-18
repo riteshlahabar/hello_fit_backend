@@ -89,29 +89,6 @@ export class AdminCatalogDeleteService {
     return { id, name: row.name };
   }
 
-  /**
-   * A slab is read by the quote calculator and stored nowhere, so no row can
-   * point at it and the delete always goes through.
-   */
-  async deleteGroupSlab(id: string, actor: AdminActor) {
-    const row = await this.prisma.groupSlab.findFirst({
-      where: { id, deletedAt: null },
-      select: { id: true, minPersons: true },
-    });
-
-    this.found(row, 'Group slab');
-
-    await this.prisma.groupSlab.delete({ where: { id } });
-    await this.record(
-      actor,
-      'catalog.group_slab_deleted',
-      'GroupSlab',
-      id,
-      `${row.minPersons}+ people`,
-    );
-
-    return { id, minPersons: row.minPersons };
-  }
 
   private found<T>(row: T | null, label: string): asserts row is T {
     if (!row) {

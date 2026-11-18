@@ -1,9 +1,10 @@
 /**
  * Admin Package menu — list, create, edit, activate/deactivate.
  *
- * A package holds a percent, never a price, and is global: no serviceId
- * anywhere in this suite. Delete exists since 18 Nov; the refusals it makes
- * live in smoke-admin-catalog-delete. The teardown still goes through Prisma.
+ * A package holds a percent, never a price. Since 18 Nov 2026 it also names
+ * the services it is sold on and carries its own `persons` — the pair that
+ * replaced Group Slabs. Delete refusals live in smoke-admin-catalog-delete;
+ * the teardown still goes through Prisma.
  */
 import { smoke } from './smoke-harness.mjs';
 
@@ -86,6 +87,55 @@ await s.withAdmin(async () => {
     'POST',
     '/admin/packages',
     { name: `Priced ${tag}`, sessionCount: 4, validityDays: 30, price: 4000 },
+    400,
+  );
+
+  s.section('services and persons');
+  // A package names the services it is sold on and carries its own head
+  // count (client, 18 Nov 2026) — that pair replaced Group Slabs.
+  const services = await s.call('GET', '/admin/catalog/services?limit=2');
+  const ids = (services?.data ?? []).map((row) => row.id);
+  s.check('two services to tick', ids.length >= 1, true);
+
+  const group = await s.call(
+    'POST',
+    '/admin/packages',
+    {
+      name: `Group ${tag}`,
+      sessionCount: 24,
+      persons: 3,
+      validityDays: 30,
+      percentAdjust: -20,
+      serviceIds: ids,
+    },
+    201,
+  );
+  s.check('head count stored', group?.data?.persons, 3);
+  s.check('services came back', group?.data?.services?.length, ids.length);
+
+  // The list replaces wholesale: a multi-select cannot say "drop just one".
+  const narrowed = await s.call('PATCH', `/admin/packages/${group.data.id}`, {
+    serviceIds: [ids[0]],
+  });
+  s.check('list replaced, not merged', narrowed?.data?.services?.length, 1);
+
+  const unsold = await s.call('PATCH', `/admin/packages/${group.data.id}`, {
+    serviceIds: [],
+  });
+  s.check('empty list unsells it everywhere', unsold?.data?.services?.length, 0);
+
+  // A package the customer cannot see is still a valid admin row, but a
+  // service that does not exist is not.
+  await s.call(
+    'PATCH',
+    `/admin/packages/${group.data.id}`,
+    { serviceIds: ['00000000-0000-4000-8000-000000000000'] },
+    404,
+  );
+  await s.call(
+    'POST',
+    '/admin/packages',
+    { name: `BadP ${tag}`, sessionCount: 4, validityDays: 30, persons: 0 },
     400,
   );
 

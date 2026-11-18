@@ -63,9 +63,7 @@
     "smoke:admin-reports": "node -r dotenv/config test/smoke-admin-reports.mjs",
     "smoke:pricing": "node -r dotenv/config test/smoke-pricing.mjs",
     "smoke:admin-packages": "node -r dotenv/config test/smoke-admin-packages.mjs",
-    "smoke:admin-group-slabs": "node -r dotenv/config test/smoke-admin-group-slabs.mjs",
     "smoke:admin-trainer-categories": "node -r dotenv/config test/smoke-admin-trainer-categories.mjs",
-    "smoke:admin-service-pricing": "node -r dotenv/config test/smoke-admin-service-pricing.mjs",
     "smoke:catalog-packages": "node -r dotenv/config test/smoke-catalog-packages.mjs"
   },
   "dependencies": {

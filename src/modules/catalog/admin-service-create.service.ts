@@ -7,7 +7,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ErrorCode } from '../../common/errors/error-codes';
 import { slugify, type AdminActor } from './admin-catalog.service';
-import { resolveMaxParticipants } from './service-rules';
 import type { CreateServiceDto } from './dto/admin-service.dto';
 
 /**
@@ -34,8 +33,6 @@ export class AdminServiceCreateService {
     const slug = slugify(dto.name);
     await this.assertSlugFree(slug);
 
-    const allowMultiPerson = dto.allowMultiPerson ?? false;
-
     const created = await this.prisma.service.create({
       data: {
         categoryId: dto.categoryId,
@@ -43,18 +40,9 @@ export class AdminServiceCreateService {
         slug,
         basePrice: dto.basePrice,
         durationMin: dto.durationMin,
-        level: dto.level ?? 'ALL_LEVELS',
-        allowMultiPerson,
-        maxParticipants: resolveMaxParticipants(
-          allowMultiPerson,
-          dto.maxParticipants,
-          2,
-        ),
         description: dto.description,
-        inclusions: dto.inclusions,
         equipment: dto.equipment,
         instructions: dto.instructions,
-        isHomeService: dto.isHomeService ?? true,
         allowExtension: dto.allowExtension ?? false,
         isActive: dto.isActive ?? true,
       },

@@ -1,10 +1,15 @@
 /**
- * Public package list — GET /packages (client, 17 Nov 2026).
+ * Public package list — GET /packages (client, 17 Nov 2026; reshaped 18 Nov).
  *
- * The website's Package page reads this. A package is global and holds a
- * percentage, so the list is priceless until a service supplies the rate:
- * without `serviceId` every price is null, with one they are worked out, and
- * a group service answers with nothing at all because a slab prices it.
+ * The website's Package page reads this. A package holds a percentage and its
+ * own `persons`, and it names the services it is sold on:
+ *
+ *   * no `serviceId` — every live package, prices null (terms only);
+ *   * with one — only the packages that service is sold on, priced
+ *     `basePrice x persons x sessionCount` then the percent;
+ *   * a package with no service ticked is listed nowhere.
+ *
+ *     npm run smoke:catalog-packages
  */
 import { smoke } from './smoke-harness.mjs';
 
@@ -16,30 +21,21 @@ const fixture = await s.cleanup(async (db) => {
     data: { name: `Cat ${tag}`, slug: `cat-${tag}` },
   });
 
-  const solo = await db.service.create({
-    data: {
-      categoryId: category.id,
-      name: `Solo ${tag}`,
-      slug: `solo-${tag}`,
-      durationMin: 60,
-      basePrice: 600,
-      allowMultiPerson: false,
-      maxParticipants: 1,
-    },
-  });
+  const service = (name) =>
+    db.service.create({
+      data: {
+        categoryId: category.id,
+        name: `${name} ${tag}`,
+        slug: `${name.toLowerCase()}-${tag}`,
+        durationMin: 60,
+        basePrice: 600,
+      },
+    });
 
-  const group = await db.service.create({
-    data: {
-      categoryId: category.id,
-      name: `Group ${tag}`,
-      slug: `group-${tag}`,
-      durationMin: 60,
-      basePrice: 600,
-      allowMultiPerson: true,
-      maxParticipants: 10,
-    },
-  });
+  const yoga = await service('Yoga');
+  const gym = await service('Gym');
 
+  // Sold on yoga only: a solo monthly pack.
   const monthly = await db.package.create({
     data: {
       name: `Monthly ${tag}`,
@@ -48,18 +44,46 @@ const fixture = await s.cleanup(async (db) => {
       percentAdjust: -15,
       allowedWeekdays: [],
       sortOrder: 1,
+      services: { create: [{ serviceId: yoga.id }] },
     },
   });
 
-  const trial = await db.package.create({
+  // Sold on yoga too, and for three people — what GroupSlab used to do.
+  const trio = await db.package.create({
     data: {
-      name: `Trial ${tag}`,
-      sessionCount: 1,
-      validityDays: 7,
-      percentAdjust: 20,
-      freeSessionCount: 1,
+      name: `Trio ${tag}`,
+      sessionCount: 24,
+      persons: 3,
+      validityDays: 30,
+      percentAdjust: -20,
       allowedWeekdays: [],
       sortOrder: 2,
+      services: { create: [{ serviceId: yoga.id }] },
+    },
+  });
+
+  // Sold on gym only — it must not appear under yoga.
+  const gymOnly = await db.package.create({
+    data: {
+      name: `GymOnly ${tag}`,
+      sessionCount: 5,
+      validityDays: 7,
+      percentAdjust: 10,
+      allowedWeekdays: [],
+      sortOrder: 3,
+      services: { create: [{ serviceId: gym.id }] },
+    },
+  });
+
+  // No service ticked at all: sold nowhere.
+  const orphan = await db.package.create({
+    data: {
+      name: `Orphan ${tag}`,
+      sessionCount: 4,
+      validityDays: 30,
+      percentAdjust: 0,
+      allowedWeekdays: [],
+      sortOrder: 4,
     },
   });
 
@@ -71,13 +95,14 @@ const fixture = await s.cleanup(async (db) => {
       percentAdjust: 0,
       allowedWeekdays: [],
       isActive: false,
+      services: { create: [{ serviceId: yoga.id }] },
     },
   });
 
-  return { category, solo, group, monthly, trial, retired };
+  return { category, yoga, gym, monthly, trio, gymOnly, orphan, retired };
 });
 
-s.section('the list is public and carries terms, not prices');
+s.section('the bare list carries terms, not prices');
 const bare = await s.call('GET', '/packages', undefined, 200, 'none');
 const rows = bare?.data ?? [];
 s.check('answers an array', Array.isArray(rows), true);
@@ -88,11 +113,11 @@ s.check('no service, no price', monthly?.price, null);
 s.check('no service, no per-session price', monthly?.perSessionPrice, null);
 s.check('percent comes through as a number', monthly?.percentAdjust, -15);
 s.check('session count', monthly?.sessionCount, 10);
-s.check('validity', monthly?.validityDays, 30);
+s.check('one person by default', monthly?.persons, 1);
+s.check('it names its service', monthly?.services?.[0]?.id, fixture.yoga.id);
 
-const trial = rows.find((row) => row.id === fixture.trial.id);
-s.check('the trial is listed', Boolean(trial), true);
-s.check('free session count', trial?.freeSessionCount, 1);
+const trio = rows.find((row) => row.id === fixture.trio.id);
+s.check('the group package carries its head count', trio?.persons, 3);
 
 s.check(
   'a retired package never reaches the website',
@@ -102,32 +127,42 @@ s.check(
 
 s.section('sort order decides the running order');
 const ours = rows.filter((row) => row.name.endsWith(tag)).map((row) => row.id);
-s.check('monthly before trial', ours, [fixture.monthly.id, fixture.trial.id]);
+s.check('monthly, trio, gym, orphan', ours, [
+  fixture.monthly.id,
+  fixture.trio.id,
+  fixture.gymOnly.id,
+  fixture.orphan.id,
+]);
 
-s.section('a service supplies the rate the percent applies to');
+s.section('a service narrows the list and supplies the rate');
 const priced = await s.call(
   'GET',
-  `/packages?serviceId=${fixture.solo.id}`,
+  `/packages?serviceId=${fixture.yoga.id}`,
   undefined,
   200,
   'none',
 );
-const pricedMonthly = priced?.data?.find((row) => row.id === fixture.monthly.id);
-s.check('600 x 10 less 15% is 5100', pricedMonthly?.price, 5100);
+const forYoga = priced?.data ?? [];
+s.check('only yoga packages', forYoga.length, 2);
+
+const pricedMonthly = forYoga.find((row) => row.id === fixture.monthly.id);
+s.check('600 x 1 x 10 less 15% is 5100', pricedMonthly?.price, 5100);
 s.check('per session', pricedMonthly?.perSessionPrice, 510);
 
-const pricedTrial = priced?.data?.find((row) => row.id === fixture.trial.id);
-s.check('600 plus 20% is 720', pricedTrial?.price, 720);
+const pricedTrio = forYoga.find((row) => row.id === fixture.trio.id);
+s.check('600 x 3 x 24 less 20% is 34560', pricedTrio?.price, 34560);
+s.check('per session for the three', pricedTrio?.perSessionPrice, 1440);
 
-s.section('a group service prices by slab, so it offers no package');
-const forGroup = await s.call(
-  'GET',
-  `/packages?serviceId=${fixture.group.id}`,
-  undefined,
-  200,
-  'none',
+s.check(
+  "another service's package is not offered",
+  forYoga.some((row) => row.id === fixture.gymOnly.id),
+  false,
 );
-s.check('empty for a group service', forGroup?.data?.length, 0);
+s.check(
+  'a package with no service is offered nowhere',
+  forYoga.some((row) => row.id === fixture.orphan.id),
+  false,
+);
 
 s.section('rejections');
 const missing = await s.call(
@@ -138,7 +173,6 @@ const missing = await s.call(
   'none',
 );
 s.check('unknown service is a 404', s.errorCode(missing), 'NOT_FOUND');
-
 await s.call('GET', '/packages?serviceId=not-a-uuid', undefined, 400, 'none');
 
 await s.cleanup(async (db) => {

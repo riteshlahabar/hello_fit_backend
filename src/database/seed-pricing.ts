@@ -32,16 +32,6 @@ const PACKAGES: Array<{
 ];
 
 /**
- * Yoga group sheet. One person has no row: a size below every `minPersons`
- * gets no discount, which is the sheet's 0% line.
- */
-const GROUP_SLABS: Array<{ minPersons: number; percentOff: number }> = [
-  { minPersons: 3, percentOff: 20 },
-  { minPersons: 5, percentOff: 30 },
-  { minPersons: 10, percentOff: 50 },
-];
-
-/**
  * `Package.name` carries no unique constraint — the admin may legitimately run
  * two packages of the same shape — so the match is a name lookup rather than an
  * upsert. An admin-edited row is left alone apart from its terms.
@@ -72,19 +62,6 @@ async function seedPackages(prisma: PrismaClient) {
   console.log(`  packages: ${PACKAGES.length}`);
 }
 
-async function seedGroupSlabs(prisma: PrismaClient) {
-  for (const slab of GROUP_SLABS) {
-    await prisma.groupSlab.upsert({
-      where: { minPersons: slab.minPersons },
-      create: slab,
-      update: { percentOff: slab.percentOff, deletedAt: null },
-    });
-  }
-
-  console.log(`  group slabs: ${GROUP_SLABS.length}`);
-}
-
 export async function seedPricing(prisma: PrismaClient) {
   await seedPackages(prisma);
-  await seedGroupSlabs(prisma);
 }

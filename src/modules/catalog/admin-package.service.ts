@@ -5,6 +5,8 @@ import type { Prisma } from '../../generated/prisma/client';
 import type { AdminActor } from './admin-catalog.service';
 import {
   assertPackageNameFree,
+  assertServicesExist,
+  PACKAGE_SERVICES,
   packageUpdateData,
   packageView,
   requirePackage,
@@ -19,9 +21,9 @@ import type {
 /**
  * Package management (client pricing doc, 17 Nov 2026).
  *
- * Six global rows — trial, weekly, monthly, monthly intensive and the two
- * 90-day plans. A package holds a **percent**, never a price: the rupees come
- * from `Service.basePrice`, so one row prices every service.
+ * A package names the services it is sold on and carries its own `persons`
+ * (client, 18 Nov 2026). It holds a **percent**, never a price: the rupees
+ * come from `Service.basePrice`. A package with no service is sold nowhere.
  *
  * **No delete route.** A booking keeps its `packageId` and the invoice behind
  * it has to stay explicable; a package leaves the catalogue by going inactive.
@@ -49,7 +51,10 @@ export class AdminPackageService {
         orderBy: [{ sortOrder: 'asc' }, { sessionCount: 'asc' }],
         skip: (page - 1) * limit,
         take: limit,
-        include: { _count: { select: { bookings: true } } },
+        include: {
+          _count: { select: { bookings: true } },
+          services: PACKAGE_SERVICES,
+        },
       }),
       this.prisma.package.count({ where }),
     ]);
@@ -62,12 +67,15 @@ export class AdminPackageService {
 
   async create(dto: CreatePackageDto, actor: AdminActor) {
     await assertPackageNameFree(this.prisma, dto.name);
+    const serviceIds = dto.serviceIds ?? [];
+    await assertServicesExist(this.prisma, serviceIds);
 
     const created = await this.prisma.package.create({
       data: {
         name: dto.name,
         icon: dto.icon || null,
         sessionCount: dto.sessionCount,
+        persons: dto.persons ?? 1,
         validityDays: dto.validityDays,
         percentAdjust: dto.percentAdjust ?? 0,
         freeSessionCount: dto.freeSessionCount ?? 0,
@@ -75,7 +83,9 @@ export class AdminPackageService {
         fixedInstructorAllowed: dto.fixedInstructorAllowed ?? true,
         sortOrder: dto.sortOrder ?? 0,
         isActive: dto.isActive ?? true,
+        services: { create: serviceIds.map((serviceId) => ({ serviceId })) },
       },
+      include: { services: PACKAGE_SERVICES },
     });
 
     await this.audit.record({
@@ -102,9 +112,12 @@ export class AdminPackageService {
       await assertPackageNameFree(this.prisma, dto.name, id);
     }
 
+    if (dto.serviceIds) await assertServicesExist(this.prisma, dto.serviceIds);
+
     const updated = await this.prisma.package.update({
       where: { id },
       data: packageUpdateData(dto),
+      include: { services: PACKAGE_SERVICES },
     });
 
     await this.audit.record({

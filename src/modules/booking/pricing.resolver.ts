@@ -13,13 +13,13 @@ export interface PricedService {
   id: string;
   basePrice: number;
   durationMin: number;
-  allowMultiPerson: boolean;
-  maxParticipants: number;
 }
 
 export interface PricedPackage {
   id: string;
   sessionCount: number;
+  /** People attending each session — the package decides, not the customer. */
+  persons: number;
   freeSessionCount: number;
   percentAdjust: number;
   allowedWeekdays: number[];
@@ -33,7 +33,7 @@ export interface PricingBasis {
   /** Per session, per person — always the admin-set service rate. */
   unitPrice: number;
   participantCount: number;
-  /** The single percent that applies: package adjust OR group slab, never both. */
+  /** The package's percent; a booking with no package pays full price. */
   percentAdjust: number;
   /** Sessions the customer pays for. */
   paidSessionCount: number;
@@ -44,10 +44,12 @@ export interface PricingBasis {
 /**
  * Turns a quote request into the figures `pricing.calculator` needs.
  *
- * The client's 17 Nov rules in one place: admin sets every rate, the rate is
- * per session per person, and exactly one percentage system applies —
- * `Service.allowMultiPerson` off means packages (persons locked at 1), on
- * means group slabs (no package). → `state/pricing-rules.md`
+ * The rules in one place (client 17 Nov 2026, reshaped 18 Nov): the admin
+ * sets every rate, the rate is per session per person, and **the package is
+ * the only discount** — it names the services it is sold on and carries its
+ * own `persons`. A booking with no package is one person, one session, full
+ * price. `GroupSlab` and `Service.allowMultiPerson` were deleted with this
+ * change. → `state/pricing-rules.md`
  */
 @Injectable()
 export class PricingResolver {
@@ -55,14 +57,8 @@ export class PricingResolver {
 
   async resolve(dto: QuoteBookingDto): Promise<PricingBasis> {
     const service = await this.loadService(dto.serviceId);
-    const participantCount = this.resolveParticipants(service, dto);
     const pkg = await this.loadPackage(service, dto.packageId);
-
-    // One percent only. A multi-person service hides packages, so the two
-    // branches can never both contribute.
-    const percentAdjust = service.allowMultiPerson
-      ? -(await this.groupPercentOff(participantCount))
-      : (pkg?.percentAdjust ?? 0);
+    const participantCount = this.resolveParticipants(pkg, dto);
 
     return {
       service,
@@ -70,7 +66,7 @@ export class PricingResolver {
       addons: await loadAddonLines(this.prisma, service.id, dto.addonIds),
       unitPrice: service.basePrice,
       participantCount,
-      percentAdjust,
+      percentAdjust: pkg?.percentAdjust ?? 0,
       paidSessionCount: pkg?.sessionCount ?? dto.sessionCount ?? 1,
       freeSessionCount: pkg?.freeSessionCount ?? 0,
     };
@@ -79,13 +75,7 @@ export class PricingResolver {
   private async loadService(serviceId: string): Promise<PricedService> {
     const row = await this.prisma.service.findFirst({
       where: { id: serviceId, isActive: true, deletedAt: null },
-      select: {
-        id: true,
-        basePrice: true,
-        durationMin: true,
-        allowMultiPerson: true,
-        maxParticipants: true,
-      },
+      select: { id: true, basePrice: true, durationMin: true },
     });
 
     if (!row) {
@@ -98,29 +88,31 @@ export class PricingResolver {
     return { ...row, basePrice: Number(row.basePrice) };
   }
 
+  /**
+   * The head count comes off the package. A request may still send one, but
+   * only to agree with the package — a silent mismatch would price a booking
+   * for three people and seat one.
+   */
   private resolveParticipants(
-    service: PricedService,
+    pkg: PricedPackage | null,
     dto: QuoteBookingDto,
   ): number {
-    const asked = dto.participantCount ?? 1;
+    const fromPackage = pkg?.persons ?? 1;
+    const asked = dto.participantCount;
 
-    if (!service.allowMultiPerson && asked > 1) {
+    if (asked !== undefined && asked !== fromPackage) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_FAILED,
-        message: 'This service is priced for one person per session',
+        message: pkg
+          ? `This package is for ${fromPackage} person(s) per session`
+          : 'Choose a package to book for more than one person',
       });
     }
 
-    if (asked > service.maxParticipants && service.allowMultiPerson) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_FAILED,
-        message: `This service takes at most ${service.maxParticipants} people per session`,
-      });
-    }
-
-    return asked;
+    return fromPackage;
   }
 
+  /** The package must be live and sold on the service being booked. */
   private async loadPackage(
     service: PricedService,
     packageId: string | undefined,
@@ -129,20 +121,17 @@ export class PricingResolver {
       return null;
     }
 
-    // A group service prices by head count, not by session count, so the two
-    // can never be combined — the app hides the package dropdown for it.
-    if (service.allowMultiPerson) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_FAILED,
-        message: 'Packages do not apply to a group service',
-      });
-    }
-
     const row = await this.prisma.package.findFirst({
-      where: { id: packageId, isActive: true, deletedAt: null },
+      where: {
+        id: packageId,
+        isActive: true,
+        deletedAt: null,
+        services: { some: { serviceId: service.id } },
+      },
       select: {
         id: true,
         sessionCount: true,
+        persons: true,
         freeSessionCount: true,
         percentAdjust: true,
         allowedWeekdays: true,
@@ -153,28 +142,10 @@ export class PricingResolver {
     if (!row) {
       throw new NotFoundException({
         code: ErrorCode.NOT_FOUND,
-        message: 'Package not found',
+        message: 'That package is not offered on this service',
       });
     }
 
     return { ...row, percentAdjust: Number(row.percentAdjust) };
-  }
-
-  /**
-   * Highest slab at or below the group size; a size below every slab pays
-   * full price. Positive percent means cheaper.
-   */
-  private async groupPercentOff(participantCount: number): Promise<number> {
-    const slab = await this.prisma.groupSlab.findFirst({
-      where: {
-        isActive: true,
-        deletedAt: null,
-        minPersons: { lte: participantCount },
-      },
-      orderBy: { minPersons: 'desc' },
-      select: { percentOff: true },
-    });
-
-    return slab ? Number(slab.percentOff) : 0;
   }
 }

@@ -3,9 +3,9 @@
  * (client instruction, 18 Nov 2026).
  *
  * Past PDF 4.5 on purpose, like the create route. The assertions pin what the
- * edit may do: rename and re-slug, move category, change the rate, and flip
- * `allowMultiPerson` — the switch that decides package versus slab pricing
- * and had no admin control before this route.
+ * edit may do: rename and re-slug, move category, change the rate and hide
+ * the row. A service carries no head count — `persons` lives on the Package
+ * since 18 Nov 2026.
  *
  *     npm run smoke:admin-service-edit
  */
@@ -59,29 +59,6 @@ await s.withAdmin(async () => {
   s.check('rate changed', moved?.data?.basePrice, 850);
   s.check('duration changed', moved?.data?.durationMin, 90);
   s.check('hidden', moved?.data?.isActive, false);
-
-  s.section('allowMultiPerson can be flipped');
-  const group = await s.call('PATCH', `/admin/catalog/services/${id}`, {
-    allowMultiPerson: true,
-    maxParticipants: 8,
-  });
-  s.check('now a group service', group?.data?.allowMultiPerson, true);
-  s.check('group size kept', group?.data?.maxParticipants, 8);
-
-  const solo = await s.call('PATCH', `/admin/catalog/services/${id}`, {
-    allowMultiPerson: false,
-  });
-  s.check('back to solo', solo?.data?.allowMultiPerson, false);
-  s.check('ceiling follows the switch', solo?.data?.maxParticipants, 1);
-
-  s.section('the two pricing systems stay apart');
-  await s.call('PATCH', `/admin/catalog/services/${id}`, { maxParticipants: 6 }, 400);
-  await s.call(
-    'PATCH',
-    `/admin/catalog/services/${id}`,
-    { allowMultiPerson: true, maxParticipants: 1 },
-    400,
-  );
 
   s.section('edit is validated');
   const other = await s.call(

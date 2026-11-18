@@ -4,11 +4,26 @@ import { ErrorCode } from '../../common/errors/error-codes';
 import type { Prisma } from '../../generated/prisma/client';
 import type { UpdatePackageDto } from './dto/admin-package.dto';
 
-/** Decimal leaves as a number; the admin table formats it, not the client. */
+/** The services a package is sold on, as the panel's multi-select wants them. */
+export const PACKAGE_SERVICES = {
+  select: { service: { select: { id: true, name: true } } },
+} as const;
+
+type WithLinks = { services?: { service: { id: string; name: string } }[] };
+
+/**
+ * Decimal leaves as a number; the admin table formats it, not the client.
+ * The service links are flattened to plain rows so the panel reads
+ * `services[].name` rather than `services[].service.name`.
+ */
 export function packageView<T extends { percentAdjust: Prisma.Decimal }>(
-  row: T,
+  row: T & WithLinks,
 ) {
-  return { ...row, percentAdjust: Number(row.percentAdjust) };
+  return {
+    ...row,
+    percentAdjust: Number(row.percentAdjust),
+    ...(row.services && { services: row.services.map((l) => l.service) }),
+  };
 }
 
 export async function requirePackage(prisma: PrismaService, id: string) {
@@ -22,6 +37,28 @@ export async function requirePackage(prisma: PrismaService, id: string) {
   }
 
   return row;
+}
+
+/**
+ * Every id must name a live service, or the admin has ticked something that
+ * cannot be sold and would never show on the site.
+ */
+export async function assertServicesExist(
+  prisma: PrismaService,
+  serviceIds: string[],
+) {
+  if (serviceIds.length === 0) return;
+
+  const found = await prisma.service.count({
+    where: { id: { in: serviceIds }, deletedAt: null },
+  });
+
+  if (found !== serviceIds.length) {
+    throw new NotFoundException({
+      code: ErrorCode.NOT_FOUND,
+      message: 'One or more of those services no longer exist',
+    });
+  }
 }
 
 /**
@@ -56,6 +93,9 @@ export async function assertPackageNameFree(
  * Only the fields actually sent. An absent field must leave the stored value
  * alone — a PATCH that quietly reset `percentAdjust` to 0 would change every
  * price on the catalogue.
+ *
+ * `serviceIds` is the one exception to "merge": it replaces the whole list,
+ * because a multi-select has no way to say "remove just this one".
  */
 export function packageUpdateData(
   dto: UpdatePackageDto,
@@ -66,6 +106,7 @@ export function packageUpdateData(
     // column — the card then draws its own mark.
     ...(dto.icon !== undefined && { icon: dto.icon === '' ? null : dto.icon }),
     ...(dto.sessionCount !== undefined && { sessionCount: dto.sessionCount }),
+    ...(dto.persons !== undefined && { persons: dto.persons }),
     ...(dto.validityDays !== undefined && { validityDays: dto.validityDays }),
     ...(dto.percentAdjust !== undefined && {
       percentAdjust: dto.percentAdjust,
@@ -80,5 +121,11 @@ export function packageUpdateData(
       fixedInstructorAllowed: dto.fixedInstructorAllowed,
     }),
     ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
+    ...(dto.serviceIds !== undefined && {
+      services: {
+        deleteMany: {},
+        create: dto.serviceIds.map((serviceId) => ({ serviceId })),
+      },
+    }),
   };
 }

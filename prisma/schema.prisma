@@ -753,23 +753,13 @@ model Service {
   durationMin     Int          @map("duration_min")
   /// The rate for ONE session for ONE person. Admin sets it; providers do not
   /// (client, 17 Nov 2026 — state/pricing-rules.md). Everything else is a
-  /// percentage on top: `gross = basePrice x persons x sessions`.
+  /// percentage on top: `gross = basePrice x persons x sessions`, and both
+  /// `persons` and `sessions` now come from the Package (client, 18 Nov 2026).
   basePrice       Decimal      @map("base_price") @db.Decimal(10, 2)
-  level           ServiceLevel @default(ALL_LEVELS)
-  /// Which of the two percentage systems this service uses, and only one ever
-  /// applies. False: the customer picks a Package and persons stay at 1.
-  /// True: the customer picks a group size and GroupSlab applies instead; the
-  /// package dropdown is hidden. The two never meet, so no precedence rule is
-  /// needed and the admin can always predict the price.
-  allowMultiPerson Boolean     @default(false) @map("allow_multi_person")
-  /// Ceiling on the group-size dropdown. Only read when allowMultiPerson.
-  maxParticipants Int          @default(1) @map("max_participants")
   equipment       String?      @db.Text
   description     String?      @db.Text
-  inclusions      String?      @db.Text
   /// Shown to the customer before the session and in the confirmation.
   instructions    String?      @db.Text
-  isHomeService   Boolean      @default(true) @map("is_home_service")
   /// Whether the customer may extend the to-time beyond durationMin.
   allowExtension  Boolean      @default(false) @map("allow_extension")
   isActive        Boolean      @default(true) @map("is_active")
@@ -779,6 +769,7 @@ model Service {
   bookings           Booking[]
   sessions           BookingSession[]
   commissionRules    CommissionRule[]
+  packages           PackageService[]
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -849,6 +840,11 @@ model Package {
   /// back to the card's default mark; this is decoration, never meaning.
   icon                   String? @db.VarChar(16)
   sessionCount           Int     @map("session_count")
+  /// People attending each session on this package (client, 18 Nov 2026).
+  /// The rate is per person, so it multiplies the gross:
+  /// `basePrice x persons x sessionCount`, then `percentAdjust`. This replaced
+  /// GroupSlab — a group deal is simply a package with persons above 1.
+  persons                Int     @default(1)
   validityDays           Int     @map("validity_days")
   /// Signed percentage on the gross: +20 is the trial markup, -15 the 90-day
   /// intensive discount, 0 the monthly intensive. Never hard-coded anywhere —
@@ -864,6 +860,10 @@ model Package {
   isActive               Boolean @default(true) @map("is_active")
 
   bookings Booking[]
+  /// Which services this package is offered on (client, 18 Nov 2026). A
+  /// package with no row here is offered nowhere — it never shows to a
+  /// customer until the admin ticks at least one service.
+  services PackageService[]
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -873,28 +873,26 @@ model Package {
   @@map("packages")
 }
 
-/// Group-size discount, the other half of the pricing sheet: 3 people -20%,
-/// 5 people -30%, 10 people -50%.
+/// Which services a package is sold on (client, 18 Nov 2026).
 ///
-/// Only read when the booked service has `allowMultiPerson`. The customer's
-/// group-size dropdown runs 1 to `Service.maxParticipants`, so most sizes have
-/// no row of their own: a size falls back to the highest `minPersons` at or
-/// below it, and a size below every row gets no discount.
-model GroupSlab {
-  id         String  @id @default(uuid()) @db.Uuid
-  /// Smallest group this row applies to. Unique: two rows for the same size
-  /// would make the discount depend on row order.
-  minPersons Int     @unique @map("min_persons")
-  /// Percent off the gross. Positive means cheaper.
-  percentOff Decimal @map("percent_off") @db.Decimal(5, 2)
-  isActive   Boolean @default(true) @map("is_active")
+/// Packages were global until this day: one percent applied to every solo
+/// service and a group booking priced off GroupSlab instead. The client
+/// replaced both with this — a package names its services and carries its own
+/// `persons`, so "yoga, 24 sessions, 3 people" is one row the admin types.
+/// A package with no row here is sold nowhere.
+model PackageService {
+  id        String @id @default(uuid()) @db.Uuid
+  packageId String @map("package_id") @db.Uuid
+  serviceId String @map("service_id") @db.Uuid
 
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
-  @@index([isActive, minPersons])
-  @@map("group_slabs")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([packageId, serviceId])
+  @@index([serviceId])
+  @@map("package_services")
 }
 
 /// Basic / Standard / Premium / Elite — the band a provider sits in.
@@ -1043,9 +1041,9 @@ model Booking {
   addressId     String        @map("address_id") @db.Uuid
   type          BookingType   @default(SINGLE)
   sessionCount  Int           @default(1) @map("session_count")
-  /// People attending each session. The rate is per person, so this multiplies
-  /// the gross; above 1 it also selects the GroupSlab. Only a service with
-  /// `allowMultiPerson` may exceed 1.
+  /// People attending each session, copied from the booked package (client,
+  /// 18 Nov 2026). The rate is per person, so it multiplies the gross. A
+  /// booking with no package stays at 1.
   participantCount Int        @default(1) @map("participant_count")
   grossAmount   Decimal       @map("gross_amount") @db.Decimal(10, 2)
   discount      Decimal       @default(0) @db.Decimal(10, 2)

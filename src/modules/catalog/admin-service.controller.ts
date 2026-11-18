@@ -18,13 +18,11 @@ import {
   RequirePermissions,
 } from '../../common/decorators/auth.decorators';
 import { AdminCatalogService, type AdminActor } from './admin-catalog.service';
-import { AdminServicePricingService } from './admin-service-pricing.service';
 import { AdminServiceCreateService } from './admin-service-create.service';
 import { AdminServiceUpdateService } from './admin-service-update.service';
 import { AdminCatalogDeleteService } from './admin-catalog-delete.service';
 import { CreateServiceDto } from './dto/admin-service.dto';
 import { UpdateServiceDto } from './dto/admin-service-update.dto';
-import { UpdateServicePricingDto } from './dto/admin-service-pricing.dto';
 import {
   ListServicesQueryDto,
   SetServiceVisibilityDto,
@@ -34,17 +32,15 @@ import {
  * The service half of catalogue management (PDF 6.5) — categories live in
  * `AdminCatalogController` under the same `admin/catalog` prefix.
  *
- * Six routes. **Create, edit and hard delete all go past §4.5**, which gives
+ * Five routes. **Create, edit and hard delete all go past §4.5**, which gives
  * the provider its own services and the admin review and visibility only;
- * the client asked for each one (18 Nov 2026), the same way admin-only
- * pricing overrode §4.5 on 17 Nov. → `state/scope-documents.md`
+ * the client asked for each one (18 Nov 2026). → `state/scope-documents.md`
  */
 @Controller('admin/catalog')
 @AllowAudience('admin')
 export class AdminServiceController {
   constructor(
     private readonly catalog: AdminCatalogService,
-    private readonly servicePricing: AdminServicePricingService,
     private readonly serviceCreate: AdminServiceCreateService,
     private readonly serviceUpdate: AdminServiceUpdateService,
     private readonly deletes: AdminCatalogDeleteService,
@@ -73,9 +69,8 @@ export class AdminServiceController {
 
   /**
    * Edit a service (client, 18 Nov 2026). Every field the Add form has,
-   * `allowMultiPerson` included — it decides package versus slab pricing and
-   * had no admin control until this route. `:id/pricing` stays for the
-   * rate-only screen.
+   * `persons` now lives on the Package, so a service carries no group fields
+   * at all (client, 18 Nov 2026).
    */
   @Patch('services/:id')
   @RequirePermissions('catalog:edit')
@@ -117,25 +112,6 @@ export class AdminServiceController {
           : dto.isActive
             ? 'Service is visible to customers'
             : 'Service hidden from customers',
-    };
-  }
-
-  /**
-   * The service rate card — admin-only pricing (client, 17 Nov 2026, restated
-   * strictly). A deliberate override of PDF 4.5; see
-   * `state/pricing-rules.md`.
-   */
-  @Patch('services/:id/pricing')
-  @RequirePermissions('catalog:edit')
-  async updateServicePricing(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateServicePricingDto,
-    @CurrentUser('id') userId: string,
-    @Req() req: Request,
-  ) {
-    return {
-      data: await this.servicePricing.update(id, dto, this.actor(userId, req)),
-      message: 'Service pricing updated',
     };
   }
 

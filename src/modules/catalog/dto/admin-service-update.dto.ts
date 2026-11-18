@@ -1,6 +1,5 @@
 import {
   IsBoolean,
-  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -11,7 +10,6 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { ServiceLevel } from '../../../generated/prisma/enums';
 
 /**
  * Editing a service from the admin panel (client instruction, 18 Nov 2026).
@@ -22,8 +20,8 @@ import { ServiceLevel } from '../../../generated/prisma/enums';
  * button. → `state/scope-documents.md`
  *
  * Every field is optional — the panel sends the whole form, a script may
- * send one key. The rate fields overlap `UpdateServicePricingDto`, which
- * stays for the pricing-only screen; both end at the same column rules.
+ * send one key. A service carries no group fields since 18 Nov 2026:
+ * `persons` lives on the Package instead.
  */
 export class UpdateServiceDto {
   @IsOptional()
@@ -50,32 +48,9 @@ export class UpdateServiceDto {
   durationMin?: number;
 
   @IsOptional()
-  @IsEnum(ServiceLevel)
-  level?: ServiceLevel;
-
-  /**
-   * Which percentage system the service uses. False: packages, one person.
-   * True: group slabs, no package. Never both.
-   */
-  @IsOptional()
-  @IsBoolean()
-  allowMultiPerson?: boolean;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(200)
-  maxParticipants?: number;
-
-  @IsOptional()
   @IsString()
   @MaxLength(4000)
   description?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(4000)
-  inclusions?: string;
 
   @IsOptional()
   @IsString()
@@ -86,10 +61,6 @@ export class UpdateServiceDto {
   @IsString()
   @MaxLength(4000)
   instructions?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isHomeService?: boolean;
 
   @IsOptional()
   @IsBoolean()
