@@ -8,6 +8,8 @@ import { AdminPackageController } from './admin-package.controller';
 import { AdminPackageService } from './admin-package.service';
 import { AdminServicePricingService } from './admin-service-pricing.service';
 import { AdminServiceCreateService } from './admin-service-create.service';
+import { AdminServiceUpdateService } from './admin-service-update.service';
+import { AdminServiceController } from './admin-service.controller';
 import { AdminCatalogDeleteService } from './admin-catalog-delete.service';
 import { CatalogService } from './catalog.service';
 import { PricingOptionsService } from './pricing-options';
@@ -18,6 +20,7 @@ import { AuditModule } from '../audit/audit.module';
   controllers: [
     CatalogController,
     AdminCatalogController,
+    AdminServiceController,
     AdminPackageController,
     AdminGroupSlabController,
   ],
@@ -28,6 +31,7 @@ import { AuditModule } from '../audit/audit.module';
     AdminGroupSlabService,
     AdminServicePricingService,
     AdminServiceCreateService,
+    AdminServiceUpdateService,
     AdminCatalogDeleteService,
     PricingOptionsService,
   ],

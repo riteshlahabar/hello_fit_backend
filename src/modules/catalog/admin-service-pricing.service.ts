@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -7,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ErrorCode } from '../../common/errors/error-codes';
 import type { AdminActor } from './admin-catalog.service';
+import { resolveMaxParticipants } from './service-rules';
 import type { UpdateServicePricingDto } from './dto/admin-service-pricing.dto';
 
 /**
@@ -34,7 +34,7 @@ export class AdminServicePricingService {
     const service = await this.require(id);
 
     const allowMultiPerson = dto.allowMultiPerson ?? service.allowMultiPerson;
-    const maxParticipants = this.resolveMax(
+    const maxParticipants = resolveMaxParticipants(
       allowMultiPerson,
       dto.maxParticipants,
       service.maxParticipants,
@@ -83,40 +83,6 @@ export class AdminServicePricingService {
     // Bookings already made keep the gross they were created with; only the
     // next quote reads the new rate. Said out loud so nobody expects a repipe.
     return { ...updated, basePrice: Number(updated.basePrice) };
-  }
-
-  /**
-   * The two systems never meet, so the head-count ceiling has to follow the
-   * switch: a solo service is pinned to one person, and a group service that
-   * tops out at one person would offer a dropdown with a single entry and no
-   * slab could ever apply.
-   */
-  private resolveMax(
-    allowMultiPerson: boolean,
-    asked: number | undefined,
-    current: number,
-  ): number {
-    if (!allowMultiPerson) {
-      if (asked !== undefined && asked > 1) {
-        throw new BadRequestException({
-          code: ErrorCode.VALIDATION_FAILED,
-          message:
-            'A service priced by package takes one person per session. Turn on allowMultiPerson first.',
-        });
-      }
-      return 1;
-    }
-
-    const next = asked ?? current;
-
-    if (next < 2) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_FAILED,
-        message: 'A group service needs maxParticipants of at least 2',
-      });
-    }
-
-    return next;
   }
 
   private async require(id: string) {

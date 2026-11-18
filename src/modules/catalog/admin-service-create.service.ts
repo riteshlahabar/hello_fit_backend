@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -8,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ErrorCode } from '../../common/errors/error-codes';
 import { slugify, type AdminActor } from './admin-catalog.service';
+import { resolveMaxParticipants } from './service-rules';
 import type { CreateServiceDto } from './dto/admin-service.dto';
 
 /**
@@ -45,7 +45,11 @@ export class AdminServiceCreateService {
         durationMin: dto.durationMin,
         level: dto.level ?? 'ALL_LEVELS',
         allowMultiPerson,
-        maxParticipants: this.resolveMax(allowMultiPerson, dto.maxParticipants),
+        maxParticipants: resolveMaxParticipants(
+          allowMultiPerson,
+          dto.maxParticipants,
+          2,
+        ),
         description: dto.description,
         inclusions: dto.inclusions,
         equipment: dto.equipment,
@@ -73,35 +77,6 @@ export class AdminServiceCreateService {
     });
 
     return { ...created, basePrice: Number(created.basePrice) };
-  }
-
-  /**
-   * The same rule the rate card enforces: the two percentage systems never
-   * meet, so a solo service is pinned to one person and a group service that
-   * topped out at one could never reach a slab.
-   */
-  private resolveMax(allowMultiPerson: boolean, asked?: number): number {
-    if (!allowMultiPerson) {
-      if (asked !== undefined && asked > 1) {
-        throw new BadRequestException({
-          code: ErrorCode.VALIDATION_FAILED,
-          message:
-            'A service priced by package takes one person per session. Turn on allowMultiPerson first.',
-        });
-      }
-      return 1;
-    }
-
-    const next = asked ?? 2;
-
-    if (next < 2) {
-      throw new BadRequestException({
-        code: ErrorCode.VALIDATION_FAILED,
-        message: 'A group service needs maxParticipants of at least 2',
-      });
-    }
-
-    return next;
   }
 
   private async requireCategory(id: string) {

@@ -5,7 +5,7 @@
  * The route goes past PDF 4.5, which gives the provider its own services, so
  * the assertions pin what it may and may not do: it creates, it derives the
  * slug, it refuses a duplicate name, it holds the two pricing systems apart,
- * and there is still **no edit** route behind it.
+ * and it leaves the row ready for the edit route beside it.
  *
  *     npm run smoke:admin-service-create
  */
@@ -112,8 +112,8 @@ await s.withAdmin(async () => {
   await s.call('POST', '/admin/catalog/services', { categoryId, name: `Free ${tag}`, basePrice: -1, durationMin: 60 }, 400);
   await s.call('POST', '/admin/catalog/services', { categoryId, basePrice: 500, durationMin: 60 }, 400);
 
-  s.section('still no edit route');
-  await s.call('PATCH', `/admin/catalog/services/${made[0]}`, { name: 'Renamed' }, 404);
+  s.section('edit lives in smoke:admin-service-edit');
+  await s.call('PATCH', `/admin/catalog/services/${made[0]}`, { name: `Solo Service ${tag}` }, 200);
   // Delete does exist since 18 Nov — smoke-admin-catalog-delete covers it.
 
   s.section('the new service is public at once');
