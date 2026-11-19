@@ -112,6 +112,10 @@ s.check(
 );
 
 s.section('the quote applies the package percent');
+// The quote is a customer route. Without this the suite sent every call below
+// with an empty bearer and read twenty 401s as pricing failures.
+await s.loginCustomer();
+
 const pkgQuote = await s.call(
   'POST',
   '/app/customer/bookings/quote',

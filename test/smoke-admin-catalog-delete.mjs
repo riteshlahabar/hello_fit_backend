@@ -106,10 +106,17 @@ await s.withAdmin(async () => {
   }
 
   s.section('a package deletes while nothing books it');
+  // `serviceIds` is compulsory since 19 Nov 2026, so the fixture sells the
+  // package on the service created just above. → state/pricing-rules.md
   const pack = await s.call(
     'POST',
     '/admin/packages',
-    { name: `Del Pack ${tag}`, sessionCount: 4, validityDays: 30 },
+    {
+      name: `Del Pack ${tag}`,
+      sessionCount: 4,
+      validityDays: 30,
+      serviceIds: [linkedServiceId],
+    },
     201,
   );
   const packageId = pack?.data?.id ?? '';

@@ -67,7 +67,7 @@ export class AdminPackageService {
 
   async create(dto: CreatePackageDto, actor: AdminActor) {
     await assertPackageNameFree(this.prisma, dto.name);
-    const serviceIds = dto.serviceIds ?? [];
+    const serviceIds = dto.serviceIds;
     await assertServicesExist(this.prisma, serviceIds);
 
     const created = await this.prisma.package.create({

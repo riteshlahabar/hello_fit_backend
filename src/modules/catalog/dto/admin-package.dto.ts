@@ -1,5 +1,6 @@
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -74,15 +75,18 @@ export class CreatePackageDto {
   persons?: number;
 
   /**
-   * The services this package is sold on. Empty or absent means the package
-   * is sold nowhere until the admin ticks one (client, 18 Nov 2026).
+   * The services this package is sold on (client, 18 Nov 2026).
+   *
+   * **Compulsory, at least one** (client, 19 Nov 2026), which is the change
+   * from "empty means sold nowhere": a package nobody can buy was only ever
+   * an admin forgetting to tick a box, and the dialog now stars the field.
    */
-  @IsOptional()
   @IsArray()
+  @ArrayMinSize(1)
   @ArrayMaxSize(200)
   @ArrayUnique()
   @IsUUID('4', { each: true })
-  serviceIds?: string[];
+  serviceIds!: string[];
 
   /** Days the package stays usable from the first session. */
   @IsInt()
@@ -161,10 +165,13 @@ export class UpdatePackageDto {
 
   /**
    * Replaces the whole list of services this package is sold on. Absent
-   * leaves the links alone; an empty array unsells it everywhere.
+   * leaves the links alone; **an empty array is refused** — one service is
+   * compulsory (client, 19 Nov 2026), so unselling a package everywhere is
+   * what deactivating it is for.
    */
   @IsOptional()
   @IsArray()
+  @ArrayMinSize(1)
   @ArrayMaxSize(200)
   @ArrayUnique()
   @IsUUID('4', { each: true })
