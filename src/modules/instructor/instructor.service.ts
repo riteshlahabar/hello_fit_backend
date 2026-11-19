@@ -33,8 +33,9 @@ import {
 import type {
   ApplyAsInstructorDto,
   UpdateInstructorProfileDto,
-  UploadDocumentDto,
 } from './dto/instructor.dto';
+import { UploadDocumentDto } from './dto/instructor-document.dto';
+import { pickProfileContactFields } from './profile-contact-fields';
 import type {
   AdminUpdateInstructorDto,
   ChangeInstructorStatusDto,
@@ -166,7 +167,14 @@ export class InstructorService {
       ...(dto.sessionFormats !== undefined && {
         sessionFormats: dto.sessionFormats,
       }),
+      ...pickProfileContactFields(dto),
     });
+
+    // `email` lives on User, which already owns a unique email column; the
+    // profile has none and should not grow a second copy.
+    if (dto.email !== undefined) {
+      await this.repo.updateUserEmail(userId, dto.email);
+    }
 
     const documents = await this.repo.listDocuments(profile.id);
     return this.decorate(updated, documents);

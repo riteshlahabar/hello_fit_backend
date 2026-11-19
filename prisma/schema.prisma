@@ -62,6 +62,12 @@ enum KycStatus {
   REJECTED
 }
 
+/// The two account types an Indian bank form offers (trainer app page 20).
+enum BankAccountType {
+  SAVINGS
+  CURRENT
+}
+
 /// Teacher onboarding pipeline (spec 3.6).
 enum OnboardingStage {
   APPLIED
@@ -216,6 +222,29 @@ model InstructorProfile {
   /// also teaches online or at their own venue adds those.
   sessionFormats   SessionFormat[]  @default([CUSTOMER_HOME]) @map("session_formats")
   photoUrl         String?          @map("photo_url") @db.Text
+  /// Postal address, from the trainer app's onboarding wizard (pages 13, 18 of
+  /// the client's HTML pack, 19 Nov 2026). Separate from the home base below:
+  /// this is what a human reads, that is what the matcher measures from.
+  addressLine      String?          @map("address_line") @db.Text
+  landmark         String?          @db.VarChar(160)
+  city             String?          @db.VarChar(120)
+  state            String?          @db.VarChar(120)
+  pincode          String?          @db.VarChar(6)
+  country          String?          @default("India") @db.VarChar(120)
+  /// Professional background (page 14). `clientsTrainedBand` is a band, not a
+  /// count, because the screen asks for one and a count nobody verifies would
+  /// read as fact.
+  qualification      String?        @db.VarChar(160)
+  institute          String?        @db.VarChar(160)
+  clientsTrainedBand String?        @map("clients_trained_band") @db.VarChar(20)
+  /// Free-text locality the provider serves (page 18, and PDF §4.2 which calls
+  /// service areas "free text the provider types into their own profile").
+  /// Deliberately **not** `InstructorServiceArea` — that joins the admin-owned
+  /// `ServiceArea` master, which the provider cannot add rows to.
+  serviceLocality  String?          @map("service_locality") @db.VarChar(160)
+  /// Only meaningful with PROVIDER_LOCATION in `sessionFormats` (page 18).
+  studioName       String?          @map("studio_name") @db.VarChar(160)
+  studioAddress    String?          @map("studio_address") @db.Text
   /// Home base the travel radius and distance score are measured from.
   homeBaseLat      Decimal?         @map("home_base_lat") @db.Decimal(10, 7)
   homeBaseLng      Decimal?         @map("home_base_lng") @db.Decimal(10, 7)
@@ -257,12 +286,44 @@ model InstructorProfile {
   commissionRules        CommissionRule[]
   earnings               Earning[]
   payouts                Payout[]
+  bankAccount            InstructorBankAccount?
 
   @@index([status, kycStatus])
   @@index([onboardingStage])
   @@index([dutyStatus])
   @@index([branchId])
   @@map("instructor_profiles")
+}
+
+/// Where a provider's payout goes (trainer app page 20, 19 Nov 2026).
+///
+/// One row per provider — a payout has exactly one destination, and a list
+/// would mean choosing between them at transfer time, which nobody asked for.
+/// Kept out of `InstructorProfile` on purpose: this is the only table holding
+/// a bank account, so it is the only one that needs the tighter handling, and
+/// the profile is read on every search while this is read at payout time.
+///
+/// `accountNumber` is stored as given. Masking for display happens in the
+/// service, the way mobile masking already does elsewhere.
+model InstructorBankAccount {
+  id           String            @id @default(uuid()) @db.Uuid
+  instructorId String            @unique @map("instructor_id") @db.Uuid
+  holderName   String            @map("holder_name") @db.VarChar(160)
+  bankName     String            @map("bank_name") @db.VarChar(160)
+  accountNumber String           @map("account_number") @db.VarChar(34)
+  ifsc         String            @db.VarChar(11)
+  accountType  BankAccountType   @default(SAVINGS) @map("account_type")
+  upiId        String?           @map("upi_id") @db.VarChar(120)
+  /// Ops confirms the account before the first transfer; a provider editing it
+  /// clears this, so a changed account cannot inherit an old approval.
+  verifiedAt   DateTime?         @map("verified_at")
+
+  instructor InstructorProfile @relation(fields: [instructorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("instructor_bank_accounts")
 }
 
 /// KYC and certification files. Polymorphic by (ownerType, ownerId) because

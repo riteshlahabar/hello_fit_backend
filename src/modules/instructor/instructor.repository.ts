@@ -70,6 +70,11 @@ export class InstructorRepository {
     return this.prisma.instructorProfile.update({ where: { id }, data });
   }
 
+  /** The email column lives on User, so the profile update cannot carry it. */
+  updateUserEmail(userId: string, email: string) {
+    return this.prisma.user.update({ where: { id: userId }, data: { email } });
+  }
+
   /** Page of the applicant pipeline, newest application first. */
   async listProfiles(filter: {
     stage?: OnboardingStage;

@@ -1,8 +1,11 @@
+
+import { InstructorContactDto } from './instructor-contact.dto';
 import {
   ArrayMaxSize,
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
+  IsEmail,
   IsEnum,
   IsISO8601,
   IsInt,
@@ -11,6 +14,7 @@ import {
   IsOptional,
   IsString,
   Length,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -51,7 +55,7 @@ export class ApplyAsInstructorDto {
  * buffer and status are set by admin, and a teacher who could raise their own
  * daily cap or shrink their own travel buffer would quietly break scheduling.
  */
-export class UpdateInstructorProfileDto {
+export class UpdateInstructorProfileDto extends InstructorContactDto {
   @IsOptional()
   @IsString()
   @Length(2, 120)
@@ -132,32 +136,5 @@ export class UpdateInstructorProfileDto {
   @Min(1)
   @Max(100)
   travelRadiusKm?: number;
-}
 
-/**
- * Metadata for an upload. The file itself arrives as multipart `file`; these
- * ride alongside as form fields, so every value is a string on the wire and
- * the global ValidationPipe's `transform` converts them.
- */
-export class UploadDocumentDto {
-  @IsEnum(DocumentType)
-  docType!: DocumentType;
-
-  /** PAN, Aadhaar, licence or certificate number, where the type has one. */
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  number?: string;
-
-  @IsOptional()
-  @IsISO8601({ strict: true })
-  issueDate?: string;
-
-  /**
-   * Drives the expiry reminder and the `isEligibleForWork` check. Required for
-   * police verification in practice, but that is policy, not shape.
-   */
-  @IsOptional()
-  @IsISO8601({ strict: true })
-  expiryDate?: string;
 }

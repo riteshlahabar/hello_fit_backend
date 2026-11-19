@@ -21,8 +21,8 @@ import {
 import {
   ApplyAsInstructorDto,
   UpdateInstructorProfileDto,
-  UploadDocumentDto,
 } from './dto/instructor.dto';
+import { UploadDocumentDto } from './dto/instructor-document.dto';
 
 /**
  * The teacher's own onboarding, KYC uploads and profile (spec 3.6).
