@@ -31,7 +31,7 @@ import type {
   MarkPayoutPaidDto,
   WithholdEarningDto,
 } from './dto/payout.dto';
-import type { AdminActor } from '../instructor/instructor.service';
+import type { AdminActor } from '../instructor/instructor-actor';
 import type { PayoutStatus } from '../../generated/prisma/enums';
 
 /** What one cycle's generation did, per teacher. */

@@ -1,5 +1,7 @@
 
+import { Transform } from 'class-transformer';
 import { InstructorContactDto } from './instructor-contact.dto';
+import { ddMmYyyyToIsoDate } from '../../../common/dates/format';
 import {
   ArrayMaxSize,
   ArrayNotEmpty,
@@ -81,8 +83,13 @@ export class UpdateInstructorProfileDto extends InstructorContactDto {
   @IsEnum(Gender)
   gender?: Gender;
 
-  /** Calendar date (YYYY-MM-DD). Stored on a @db.Date column. */
+  /**
+   * Calendar date, `dd-mm-yyyy` (hard rule 4). ISO is still accepted while the
+   * four surfaces catch up — `ddMmYyyyToIsoDate` normalises the new format and
+   * passes the old one through. Stored on a `@db.Date` column either way.
+   */
   @IsOptional()
+  @Transform(({ value }) => ddMmYyyyToIsoDate(value))
   @IsISO8601({ strict: true })
   dob?: string;
 

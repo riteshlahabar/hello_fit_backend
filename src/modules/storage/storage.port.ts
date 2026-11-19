@@ -9,6 +9,25 @@
  */
 export const STORAGE_PORT = Symbol('STORAGE_PORT');
 
+/**
+ * The one key prefix served without a signature.
+ *
+ * A KYC document is private and expires; a provider's **profile photo** is the
+ * opposite — it is drawn on a public search card for anonymous visitors, on a
+ * review and inside a booking, and a 15-minute link would break the moment any
+ * of those is cached. Those two things cannot share a rule, so they do not
+ * share a prefix: anything under `public/` is world-readable by design and
+ * everything else stays signed.
+ *
+ * Nothing but a profile photo may be written here. The guard is the key: it
+ * carries a UUID, so a photo is unguessable even though it is unsigned.
+ */
+export const PUBLIC_KEY_PREFIX = 'public/';
+
+/** True for keys the download route serves without checking a signature. */
+export const isPublicKey = (key: string): boolean =>
+  key.startsWith(PUBLIC_KEY_PREFIX);
+
 export interface StoredObject {
   /**
    * The object key, e.g. `instructors/<uuid>/pan/<uuid>.pdf`. This is what goes
@@ -38,6 +57,15 @@ export interface StoragePort {
    * Never return a permanent link: a leaked KYC URL must expire on its own.
    */
   signedUrl(key: string, ttlSeconds: number): Promise<string>;
+
+  /**
+   * A permanent, unsigned URL for an object under `PUBLIC_KEY_PREFIX`. Throws
+   * for any other key, so a KYC document cannot be handed out by mistake.
+   *
+   * Synchronous on purpose: it is string-building, not a presign, and the
+   * provider card that needs it is a pure mapper shared by five call sites.
+   */
+  publicUrl(key: string): string;
 
   /** True when the object exists. Used to spot an orphaned Document row. */
   exists(key: string): Promise<boolean>;

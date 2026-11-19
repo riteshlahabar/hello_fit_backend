@@ -77,3 +77,20 @@ export function parseDdMmYyyy(value: string): Date | null {
 
   return roundTrips ? parsed : null;
 }
+
+/**
+ * `dd-mm-yyyy` → `yyyy-mm-dd`, for a `@Transform` in front of `@IsISO8601`.
+ *
+ * Both formats are accepted on input while the rollout runs: the four client
+ * surfaces do not ship together, so an endpoint that only took ISO yesterday
+ * has to keep taking it. Anything that is not `dd-mm-yyyy` passes straight
+ * through untouched and the validator decides on it.
+ */
+export function ddMmYyyyToIsoDate(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+
+  const parsed = parseDdMmYyyy(value);
+  if (!parsed) return value;
+
+  return parsed.toISOString().slice(0, 10);
+}

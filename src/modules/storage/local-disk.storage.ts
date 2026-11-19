@@ -4,6 +4,7 @@ import { dirname, join, normalize, resolve, sep } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EnvVars } from '../../config/env.validation';
+import { isPublicKey } from './storage.port';
 import type {
   PutObjectInput,
   StoragePort,
@@ -27,6 +28,7 @@ export class LocalDiskStorage implements StoragePort {
   private readonly logger = new Logger(LocalDiskStorage.name);
   private readonly root: string;
   private readonly secret: string;
+  private readonly baseUrl: string;
 
   constructor(private readonly config: ConfigService<EnvVars, true>) {
     this.root = resolve(
@@ -35,6 +37,32 @@ export class LocalDiskStorage implements StoragePort {
     // Reuses the refresh secret so development needs no extra variable; S3
     // will use its own credentials and never touch this.
     this.secret = this.config.get('JWT_REFRESH_SECRET', { infer: true });
+    this.baseUrl = this.resolveBaseUrl();
+  }
+
+  /**
+   * Every URL this class hands out must be absolute. A relative `/api/v1/…`
+   * looks fine in a JSON body and is useless to the two clients that matter:
+   * Flutter's `Image.network` and the admin panel's `<img>` have no page
+   * origin to resolve it against, so the image silently never loads.
+   *
+   * `PUBLIC_BASE_URL` unset used to produce exactly that, so an empty value
+   * falls back to this server's own origin and says so — a phone on the LAN
+   * still needs the real host set.
+   */
+  private resolveBaseUrl(): string {
+    const configured = (
+      this.config.get('PUBLIC_BASE_URL', { infer: true }) ?? ''
+    ).trim();
+    if (configured) return configured.replace(/\/+$/, '');
+
+    const port = this.config.get('PORT', { infer: true }) ?? 3000;
+    const fallback = `http://localhost:${port}`;
+    this.logger.warn(
+      `PUBLIC_BASE_URL is not set — file links will point at ${fallback}, ` +
+        'which no other device can reach. Set it to this host.',
+    );
+    return fallback;
   }
 
   async put(input: PutObjectInput): Promise<StoredObject> {
@@ -59,11 +87,18 @@ export class LocalDiskStorage implements StoragePort {
   signedUrl(key: string, ttlSeconds: number): Promise<string> {
     const expires = Math.floor(Date.now() / 1000) + ttlSeconds;
     const sig = this.sign(key, expires);
-    const base = this.config.get('PUBLIC_BASE_URL', { infer: true }) ?? '';
     const query = `expires=${expires}&sig=${sig}`;
     return Promise.resolve(
-      `${base}/api/v1/files/${encodeURI(key)}?${query}`,
+      `${this.baseUrl}/api/v1/files/${encodeURI(key)}?${query}`,
     );
+  }
+
+  /** The permanent link for a `public/` object. See `StoragePort.publicUrl`. */
+  publicUrl(key: string): string {
+    if (!isPublicKey(key)) {
+      throw new Error(`Refusing to build an unsigned URL for ${key}`);
+    }
+    return `${this.baseUrl}/api/v1/files/${encodeURI(key)}`;
   }
 
   async exists(key: string): Promise<boolean> {

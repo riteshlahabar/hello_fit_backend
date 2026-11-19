@@ -65,7 +65,9 @@
     "smoke:pricing": "node -r dotenv/config test/smoke-pricing.mjs",
     "smoke:admin-packages": "node -r dotenv/config test/smoke-admin-packages.mjs",
     "smoke:catalog-packages": "node -r dotenv/config test/smoke-catalog-packages.mjs",
-    "smoke:commission": "node -r dotenv/config test/smoke-commission.mjs"
+    "smoke:commission": "node -r dotenv/config test/smoke-commission.mjs",
+    "smoke:trainer-documents": "node -r dotenv/config test/smoke-trainer-documents.mjs",
+    "smoke:trainer-registration": "node -r dotenv/config test/smoke-trainer-registration.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

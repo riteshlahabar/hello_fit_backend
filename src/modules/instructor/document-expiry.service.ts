@@ -8,6 +8,7 @@ import {
   calendarDaysBetween,
   todayCalendar,
 } from '../../common/dates/calendar';
+import { formatDate } from '../../common/dates/format';
 
 /**
  * Warns a teacher before a KYC document expires, and marks it `EXPIRED` once it
@@ -74,7 +75,9 @@ export class DocumentExpiryService {
         admin: true,
         data: {
           docType: String(doc.docType),
-          expiryDate: doc.expiryDate,
+          // Hard rule 4: this lands in a push body a trainer reads.
+          // The query matched `expiryDate: target`, so the fallback never runs.
+          expiryDate: formatDate(doc.expiryDate ?? target),
           daysLeft: expiryReminderDays,
         },
       });

@@ -12,7 +12,9 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { InstructorService, type UploadedFileLike } from './instructor.service';
+import { InstructorService } from './instructor.service';
+import { InstructorDocumentService } from './instructor-document.service';
+import type { UploadedFileLike } from './instructor-actor';
 import {
   AllowAudience,
   CurrentUser,
@@ -39,7 +41,10 @@ import { UploadDocumentDto } from './dto/instructor-document.dto';
 @Controller('app/instructor')
 @AllowAudience('app')
 export class InstructorOnboardingController {
-  constructor(private readonly instructors: InstructorService) {}
+  constructor(
+    private readonly instructors: InstructorService,
+    private readonly docs: InstructorDocumentService,
+  ) {}
 
   // ------------------------------------------------------------ application
 
@@ -100,7 +105,7 @@ export class InstructorOnboardingController {
   @Get('documents')
   @Roles('INSTRUCTOR')
   async listDocuments(@CurrentUser('id') userId: string) {
-    const documents = await this.instructors.listOwnDocuments(userId);
+    const documents = await this.docs.listOwnDocuments(userId);
     return { data: documents, meta: { count: documents.length } };
   }
 
@@ -124,7 +129,7 @@ export class InstructorOnboardingController {
     @UploadedFile() file: UploadedFileLike,
   ) {
     return {
-      data: await this.instructors.uploadOwnDocument(userId, dto, file),
+      data: await this.docs.uploadOwnDocument(userId, dto, file),
       message: 'Document uploaded',
     };
   }
@@ -136,7 +141,7 @@ export class InstructorOnboardingController {
     @CurrentUser('id') userId: string,
     @Param('documentId', ParseUUIDPipe) documentId: string,
   ) {
-    return { data: await this.instructors.getOwnDocumentUrl(userId, documentId) };
+    return { data: await this.docs.getOwnDocumentUrl(userId, documentId) };
   }
 
   @Delete('documents/:documentId')
@@ -146,7 +151,7 @@ export class InstructorOnboardingController {
     @CurrentUser('id') userId: string,
     @Param('documentId', ParseUUIDPipe) documentId: string,
   ) {
-    await this.instructors.deleteOwnDocument(userId, documentId);
+    await this.docs.deleteOwnDocument(userId, documentId);
     return {
       data: { id: documentId, deleted: true },
       message: 'Document removed',

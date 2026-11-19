@@ -26,7 +26,7 @@ import {
   MarkPayoutPaidDto,
   WithholdEarningDto,
 } from './dto/payout.dto';
-import type { AdminActor } from '../instructor/instructor.service';
+import type { AdminActor } from '../instructor/instructor-actor';
 
 /**
  * Finance: the earnings ledger, payout batches and the reconciliation actions
