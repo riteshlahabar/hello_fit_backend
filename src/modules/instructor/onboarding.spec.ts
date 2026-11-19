@@ -145,15 +145,23 @@ describe('missingProfileFields', () => {
   it('names each gap', () => {
     expect(
       missingProfileFields(
-        applicant({ name: '  ', bio: '', languages: [], homeBaseLat: null }),
+        applicant({ name: '  ', bio: '', specialisations: [] }),
       ),
-    ).toEqual(['name', 'bio', 'languages', 'homeBase']);
+    ).toEqual(['name', 'bio', 'specialisations']);
   });
 
-  it('requires both halves of the home base', () => {
-    expect(missingProfileFields(applicant({ homeBaseLng: null }))).toEqual([
-      'homeBase',
-    ]);
+  // Both were dropped on 19-11-2026: neither has a screen in the design pack,
+  // so the gate could never be passed from the trainer app.
+  it('does not require languages', () => {
+    expect(missingProfileFields(applicant({ languages: [] }))).toEqual([]);
+  });
+
+  it('does not require a home base, though the columns stay for ranking', () => {
+    expect(
+      missingProfileFields(
+        applicant({ homeBaseLat: null, homeBaseLng: null }),
+      ),
+    ).toEqual([]);
   });
 
   it('does not require experienceYears — a new teacher may have none', () => {

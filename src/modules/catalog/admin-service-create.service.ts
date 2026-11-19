@@ -39,6 +39,7 @@ export class AdminServiceCreateService {
         name: dto.name,
         slug,
         basePrice: dto.basePrice,
+        commissionPct: dto.commissionPct,
         durationMin: dto.durationMin,
         description: dto.description,
         equipment: dto.equipment,
@@ -58,13 +59,18 @@ export class AdminServiceCreateService {
         name: created.name,
         slug: created.slug,
         basePrice: Number(created.basePrice),
+        commissionPct: Number(created.commissionPct),
         categoryId: created.categoryId,
       },
       ipAddress: actor.ipAddress,
       requestId: actor.requestId,
     });
 
-    return { ...created, basePrice: Number(created.basePrice) };
+    return {
+      ...created,
+      basePrice: Number(created.basePrice),
+      commissionPct: Number(created.commissionPct),
+    };
   }
 
   private async requireCategory(id: string) {

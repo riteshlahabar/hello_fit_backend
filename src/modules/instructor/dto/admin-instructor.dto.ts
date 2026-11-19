@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -11,6 +12,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import {
   InstructorStatus,
@@ -128,6 +130,19 @@ export class AdminUpdateInstructorDto {
   @ArrayNotEmpty()
   @IsEnum(SessionFormat, { each: true })
   sessionFormats?: SessionFormat[];
+
+  /**
+   * Per-provider commission override as a percent (client, 19-11-2026).
+   * Optional by design: unset, the service's own `commissionPct` applies, and
+   * that is the normal case. **Send `null` to clear it** and fall back to the
+   * service — which is why this is nullable rather than merely absent-able.
+   */
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  commissionPct?: number | null;
 }
 
 /** Approve or revoke one of a provider's service offerings (PDF 6.5). */

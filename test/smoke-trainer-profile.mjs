@@ -86,36 +86,60 @@ s.section('bank account: nothing until one is saved');
 const empty = await s.call('GET', '/app/instructor/bank-account', undefined, 200, 'instructor');
 s.check('no account yet', empty?.data, null);
 
-s.section('bank account: a good body saves and reads back masked');
+s.section('bank account: a good BANK body saves and reads back masked');
 const bank = {
+  payoutMethod: 'BANK',
   holderName: 'Bank Smoke',
   bankName: 'HDFC Bank',
   accountNumber: '50100123456789',
   ifsc: 'hdfc0001234',
   accountType: 'SAVINGS',
-  upiId: 'Bank.Smoke@HDFC',
 };
 const put = await s.call('PUT', '/app/instructor/bank-account', bank, 200, 'instructor');
 s.check('number is masked on the way out', put?.data?.accountNumberMasked, '••••6789');
 s.check('ifsc upper-cased', put?.data?.ifsc, 'HDFC0001234');
-s.check('upi lower-cased', put?.data?.upiId, 'bank.smoke@hdfc');
+s.check('method recorded', put?.data?.payoutMethod, 'BANK');
 s.check('a fresh account is unverified', put?.data?.verified, false);
 s.check('full number never leaves the server', put?.data?.accountNumber, undefined);
+// Hard rule 4: every date on the wire reads dd-mm-yyyy.
+s.check(
+  'updatedAt is dd-mm-yyyy HH:mm:ss',
+  /^\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}$/.test(put?.data?.updatedAt ?? ''),
+  true,
+);
 
 const got = await s.call('GET', '/app/instructor/bank-account', undefined, 200, 'instructor');
 s.check('reads back', got?.data?.bankName, 'HDFC Bank');
 
+s.section('payout is a radio — the chosen side is compulsory, the other cleared');
+const upi = await s.call(
+  'PUT',
+  '/app/instructor/bank-account',
+  { payoutMethod: 'UPI', upiId: 'Bank.Smoke@HDFC' },
+  200,
+  'instructor',
+);
+s.check('upi lower-cased', upi?.data?.upiId, 'bank.smoke@hdfc');
+s.check('method switched', upi?.data?.payoutMethod, 'UPI');
+s.check('stale account number cleared', upi?.data?.accountNumberMasked, null);
+s.check('stale ifsc cleared', upi?.data?.ifsc, null);
+s.check('stale holder cleared', upi?.data?.holderName, null);
+
 s.section('bank account: bad bodies are refused');
-for (const [label, patch] of [
-  ['short account number', { accountNumber: '12345' }],
-  ['account number with letters', { accountNumber: '5010012345678x' }],
-  ['ifsc missing the zero', { ifsc: 'HDFCX001234' }],
-  ['ifsc too short', { ifsc: 'HDFC001' }],
-  ['upi without a handle', { upiId: 'bank.smoke' }],
-  ['empty holder', { holderName: '' }],
+for (const [label, body] of [
+  ['short account number', { ...bank, accountNumber: '12345' }],
+  ['account number with letters', { ...bank, accountNumber: '5010012345678x' }],
+  ['ifsc missing the zero', { ...bank, ifsc: 'HDFCX001234' }],
+  ['ifsc too short', { ...bank, ifsc: 'HDFC001' }],
+  ['empty holder', { ...bank, holderName: '' }],
+  ['no payout method at all', { ...bank, payoutMethod: undefined }],
+  ['unknown payout method', { ...bank, payoutMethod: 'CHEQUE' }],
+  ['BANK without the bank fields', { payoutMethod: 'BANK' }],
+  ['UPI without a upiId', { payoutMethod: 'UPI' }],
+  ['UPI with a handle-less id', { payoutMethod: 'UPI', upiId: 'bank.smoke' }],
 ]) {
-  await s.call('PUT', '/app/instructor/bank-account', { ...bank, ...patch }, 400, 'instructor');
-  s.check(`${label} refused`, true, true);
+  const res = await s.call('PUT', '/app/instructor/bank-account', body, 400, 'instructor');
+  s.check(`${label} refused`, s.errorCode(res), 'VALIDATION_FAILED');
 }
 
 s.section('a second PUT replaces the row and drops any verification');
@@ -125,13 +149,13 @@ await s.cleanup((db) =>
 const replaced = await s.call(
   'PUT',
   '/app/instructor/bank-account',
-  { ...bank, accountNumber: '50100999888777', upiId: undefined },
+  { ...bank, accountNumber: '50100999888777' },
   200,
   'instructor',
 );
 s.check('new number masked', replaced?.data?.accountNumberMasked, '••••8777');
 s.check('verification dropped', replaced?.data?.verified, false);
-s.check('upi cleared when omitted', replaced?.data?.upiId, null);
+s.check('upi cleared when the method is BANK', replaced?.data?.upiId, null);
 
 s.section('the routes are shut without a token, and to a customer');
 await s.noToken('GET', '/app/instructor/bank-account');

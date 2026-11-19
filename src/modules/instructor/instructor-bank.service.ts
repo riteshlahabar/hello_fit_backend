@@ -2,16 +2,32 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ErrorCode } from '../../common/errors/error-codes';
 import { UpsertBankAccountDto } from './dto/instructor-bank.dto';
+import { formatDateTime } from '../../common/dates/format';
 
 /** What the provider's own app and the admin panel are allowed to read back. */
 export interface BankAccountView {
-  holderName: string;
-  bankName: string;
-  accountNumberMasked: string;
-  ifsc: string;
-  accountType: string;
+  payoutMethod: string;
+  holderName: string | null;
+  bankName: string | null;
+  accountNumberMasked: string | null;
+  ifsc: string | null;
+  accountType: string | null;
   upiId: string | null;
   verified: boolean;
+  /** `dd-mm-yyyy HH:mm:ss` — hard rule 4, `state/date-format.md`. */
+  updatedAt: string;
+}
+
+/** The shape `view` reads — every column nullable, because only one side is set. */
+interface BankAccountRow {
+  payoutMethod: string;
+  holderName: string | null;
+  bankName: string | null;
+  accountNumber: string | null;
+  ifsc: string | null;
+  accountType: string | null;
+  upiId: string | null;
+  verifiedAt: Date | null;
   updatedAt: Date;
 }
 
@@ -41,13 +57,18 @@ export class InstructorBankService {
     dto: UpsertBankAccountDto,
   ): Promise<BankAccountView> {
     const instructorId = await this.requireInstructorId(userId);
+    const bank = dto.payoutMethod === 'BANK';
+
+    // The side not chosen is nulled rather than left alone: switching to UPI
+    // must not leave a stale account number that a payout could still find.
     const data = {
-      holderName: dto.holderName,
-      bankName: dto.bankName,
-      accountNumber: dto.accountNumber,
-      ifsc: dto.ifsc,
-      ...(dto.accountType !== undefined && { accountType: dto.accountType }),
-      upiId: dto.upiId ?? null,
+      payoutMethod: dto.payoutMethod,
+      holderName: bank ? dto.holderName : null,
+      bankName: bank ? dto.bankName : null,
+      accountNumber: bank ? dto.accountNumber : null,
+      ifsc: bank ? dto.ifsc : null,
+      accountType: bank ? (dto.accountType ?? 'SAVINGS') : null,
+      upiId: bank ? null : dto.upiId,
       verifiedAt: null,
     };
 
@@ -74,25 +95,19 @@ export class InstructorBankService {
   }
 
   /** Last four digits only — the same rule the app already uses for mobiles. */
-  private static view(row: {
-    holderName: string;
-    bankName: string;
-    accountNumber: string;
-    ifsc: string;
-    accountType: string;
-    upiId: string | null;
-    verifiedAt: Date | null;
-    updatedAt: Date;
-  }): BankAccountView {
+  private static view(row: BankAccountRow): BankAccountView {
     return {
+      payoutMethod: String(row.payoutMethod),
       holderName: row.holderName,
       bankName: row.bankName,
-      accountNumberMasked: `••••${row.accountNumber.slice(-4)}`,
+      accountNumberMasked: row.accountNumber
+        ? `••••${row.accountNumber.slice(-4)}`
+        : null,
       ifsc: row.ifsc,
-      accountType: String(row.accountType),
+      accountType: row.accountType === null ? null : String(row.accountType),
       upiId: row.upiId,
       verified: row.verifiedAt !== null,
-      updatedAt: row.updatedAt,
+      updatedAt: formatDateTime(row.updatedAt),
     };
   }
 }

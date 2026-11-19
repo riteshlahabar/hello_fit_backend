@@ -644,6 +644,11 @@ export class InstructorService {
       ...(dto.sessionFormats !== undefined && {
         sessionFormats: dto.sessionFormats,
       }),
+      // Explicit null clears the override and falls back to the service's own
+      // percent, so `!== undefined` rather than a truthiness check.
+      ...(dto.commissionPct !== undefined && {
+        commissionPct: dto.commissionPct,
+      }),
     });
 
     await this.audit.record({

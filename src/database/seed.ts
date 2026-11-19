@@ -323,7 +323,8 @@ async function seedCatalog() {
           slug: service.slug,
           durationMin: service.durationMin,
           basePrice: service.basePrice,
-          level: service.level ?? 'ALL_LEVELS',
+          // Compulsory since 19 Nov 2026; the seed uses the settings default.
+          commissionPct: DEFAULT_SETTINGS.payout.defaultCommissionPercent,
         },
         update: { name: service.name, durationMin: service.durationMin },
       });

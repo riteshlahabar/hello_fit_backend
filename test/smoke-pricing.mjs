@@ -30,6 +30,7 @@ const fixture = await s.cleanup(async (db) => {
         slug: `${name.toLowerCase()}-${tag}`,
         durationMin: 60,
         basePrice: 600,
+        commissionPct: 25,
       },
     });
 

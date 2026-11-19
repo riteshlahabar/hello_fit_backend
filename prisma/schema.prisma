@@ -68,6 +68,13 @@ enum BankAccountType {
   CURRENT
 }
 
+/// Where a provider is paid. A radio on page 20, so exactly one side is
+/// filled in (client, 19 Nov 2026).
+enum PayoutMethod {
+  UPI
+  BANK
+}
+
 /// Teacher onboarding pipeline (spec 3.6).
 enum OnboardingStage {
   APPLIED
@@ -249,8 +256,10 @@ model InstructorProfile {
   homeBaseLat      Decimal?         @map("home_base_lat") @db.Decimal(10, 7)
   homeBaseLng      Decimal?         @map("home_base_lng") @db.Decimal(10, 7)
   travelRadiusKm   Int              @default(10) @map("travel_radius_km")
-  /// Basic / Standard / Premium / Elite. Decides the commission, not the rate.
-  trainerCategoryId String?         @map("trainer_category_id") @db.Uuid
+  /// Per-provider commission override, as a percent (client, 19 Nov 2026).
+  /// Null means the service's own `commissionPct` applies — which is the
+  /// normal case. Set, it wins for every service this provider delivers.
+  commissionPct    Decimal?         @map("commission_pct") @db.Decimal(5, 2)
   branchId         String?          @map("branch_id") @db.Uuid
   dailySessionCap  Int              @default(4) @map("daily_session_cap")
   /// Minutes blocked either side of a session so travel never double-books.
@@ -268,7 +277,6 @@ model InstructorProfile {
   joinedAt         DateTime?        @map("joined_at")
 
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trainerCategory TrainerCategory? @relation(fields: [trainerCategoryId], references: [id], onDelete: SetNull)
   branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
   createdAt              DateTime                @default(now()) @map("created_at")
@@ -308,11 +316,15 @@ model InstructorProfile {
 model InstructorBankAccount {
   id           String            @id @default(uuid()) @db.Uuid
   instructorId String            @unique @map("instructor_id") @db.Uuid
-  holderName   String            @map("holder_name") @db.VarChar(160)
-  bankName     String            @map("bank_name") @db.VarChar(160)
-  accountNumber String           @map("account_number") @db.VarChar(34)
-  ifsc         String            @db.VarChar(11)
-  accountType  BankAccountType   @default(SAVINGS) @map("account_type")
+  /// UPI **or** a bank account, never both (client, 19 Nov 2026 — page 20 is a
+  /// radio). The side not chosen is null, which is why every column below is
+  /// nullable: the DTO is what makes the chosen side compulsory.
+  payoutMethod PayoutMethod      @default(BANK) @map("payout_method")
+  holderName   String?           @map("holder_name") @db.VarChar(160)
+  bankName     String?           @map("bank_name") @db.VarChar(160)
+  accountNumber String?          @map("account_number") @db.VarChar(34)
+  ifsc         String?           @db.VarChar(11)
+  accountType  BankAccountType?  @map("account_type")
   upiId        String?           @map("upi_id") @db.VarChar(120)
   /// Ops confirms the account before the first transfer; a provider editing it
   /// clears this, so a changed account cannot inherit an old approval.
@@ -817,6 +829,10 @@ model Service {
   /// percentage on top: `gross = basePrice x persons x sessions`, and both
   /// `persons` and `sessions` now come from the Package (client, 18 Nov 2026).
   basePrice       Decimal      @map("base_price") @db.Decimal(10, 2)
+  /// Trainer commission, as a percent of the session value. Compulsory
+  /// (client, 19 Nov 2026) — every service states what the trainer's cut is.
+  /// A provider with their own `commissionPct` overrides it; nobody else does.
+  commissionPct   Decimal      @map("commission_pct") @db.Decimal(5, 2)
   equipment       String?      @db.Text
   description     String?      @db.Text
   /// Shown to the customer before the session and in the confirmation.
@@ -954,30 +970,6 @@ model PackageService {
   @@unique([packageId, serviceId])
   @@index([serviceId])
   @@map("package_services")
-}
-
-/// Basic / Standard / Premium / Elite — the band a provider sits in.
-///
-/// It carries no price: the rate lives on `Service.basePrice` and is the same
-/// whoever delivers the session. What the band decides is the **commission**,
-/// through a `CommissionRule` with scope `TRAINER_CATEGORY`. One row then
-/// covers every provider in the band, and a per-provider rule overrides it
-/// only for a special deal.
-model TrainerCategory {
-  id        String @id @default(uuid()) @db.Uuid
-  name      String @unique @db.VarChar(60)
-  sortOrder Int    @default(0) @map("sort_order")
-  isActive  Boolean @default(true) @map("is_active")
-
-  instructors     InstructorProfile[]
-  commissionRules CommissionRule[]
-
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  @@index([isActive, sortOrder])
-  @@map("trainer_categories")
 }
 
 model Addon {
@@ -1440,7 +1432,6 @@ enum CommissionScope {
   GLOBAL
   CATEGORY
   SERVICE
-  TRAINER_CATEGORY
   INSTRUCTOR
 }
 
@@ -1577,15 +1568,16 @@ model Refund {
   @@map("refunds")
 }
 
-/// Commission resolution order is instructor, then service, then category,
-/// then global: the first matching rule wins (spec 3.7).
+/// Legacy commission table. **Unreachable since 19 Nov 2026**: commission is
+/// now `InstructorProfile.commissionPct ?? Service.commissionPct`, and the
+/// service percent is compulsory, so a rule is never consulted. Kept because
+/// the client asked only to remove the trainer-category scope, not the table;
+/// it has no admin screen and only ever held one seeded GLOBAL row.
 model CommissionRule {
   id            String          @id @default(uuid()) @db.Uuid
   scope         CommissionScope
   categoryId    String?         @map("category_id") @db.Uuid
   serviceId     String?         @map("service_id") @db.Uuid
-  /// Set when scope is TRAINER_CATEGORY — the normal way to set commission.
-  trainerCategoryId String?     @map("trainer_category_id") @db.Uuid
   instructorId  String?         @map("instructor_id") @db.Uuid
   type          CommissionType  @default(PERCENT)
   value         Decimal         @db.Decimal(10, 2)
@@ -1595,7 +1587,6 @@ model CommissionRule {
   createdById   String?         @map("created_by_id") @db.Uuid
 
   service         Service?           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  trainerCategory TrainerCategory?   @relation(fields: [trainerCategoryId], references: [id], onDelete: Cascade)
   instructor      InstructorProfile? @relation(fields: [instructorId], references: [id], onDelete: Cascade)
 
   createdAt DateTime  @default(now()) @map("created_at")

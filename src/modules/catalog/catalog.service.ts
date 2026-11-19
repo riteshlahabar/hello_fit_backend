@@ -62,9 +62,22 @@ export class CatalogService {
    * carries its own `persons`, so the prices are derived here.
    */
   async getService(id: string) {
+    // A `select`, not an `include`: the commission the trainer earns is
+    // internal and an `include` would put it in front of every visitor.
     const service = await this.prisma.service.findFirst({
       where: { id, isActive: true, deletedAt: null },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        categoryId: true,
+        durationMin: true,
+        basePrice: true,
+        description: true,
+        equipment: true,
+        instructions: true,
+        allowExtension: true,
+        isActive: true,
         category: { select: { id: true, name: true, slug: true } },
       },
     });

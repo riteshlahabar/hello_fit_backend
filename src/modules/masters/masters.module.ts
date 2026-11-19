@@ -1,7 +1,5 @@
 import { Module } from '@nestjs/common';
 import { AdminMastersController } from './admin-masters.controller';
-import { AdminTrainerCategoryController } from './admin-trainer-category.controller';
-import { AdminTrainerCategoryService } from './admin-trainer-category.service';
 import { MastersRepository } from './masters.repository';
 import { MastersService } from './masters.service';
 import { AuditModule } from '../audit/audit.module';
@@ -13,8 +11,8 @@ import { AuditModule } from '../audit/audit.module';
  */
 @Module({
   imports: [AuditModule],
-  controllers: [AdminMastersController, AdminTrainerCategoryController],
-  providers: [MastersService, MastersRepository, AdminTrainerCategoryService],
+  controllers: [AdminMastersController],
+  providers: [MastersService, MastersRepository],
   exports: [MastersService],
 })
 export class MastersModule {}

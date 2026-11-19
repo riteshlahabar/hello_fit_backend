@@ -35,7 +35,7 @@ await s.withAdmin(async () => {
   const service = await s.call(
     'POST',
     '/admin/catalog/services',
-    { categoryId, name: `Del Svc ${tag}`, basePrice: 700, durationMin: 60 },
+    { categoryId, name: `Del Svc ${tag}`, basePrice: 700, commissionPct: 25, durationMin: 60 },
     201,
   );
   const serviceId = service?.data?.id ?? '';
@@ -72,7 +72,7 @@ await s.withAdmin(async () => {
   const held2 = await s.call(
     'POST',
     '/admin/catalog/services',
-    { categoryId: linkedCategoryId, name: `Linked Svc ${tag}`, basePrice: 700, durationMin: 60 },
+    { categoryId: linkedCategoryId, name: `Linked Svc ${tag}`, basePrice: 700, commissionPct: 25, durationMin: 60 },
     201,
   );
   const linkedServiceId = held2?.data?.id ?? '';

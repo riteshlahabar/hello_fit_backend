@@ -42,6 +42,16 @@ export class CreateServiceDto {
   @Max(480)
   durationMin!: number;
 
+  /**
+   * The trainer's cut of the session value, as a percent. **Compulsory**
+   * (client, 19 Nov 2026) — every service states what a trainer earns. A
+   * provider with their own `commissionPct` overrides it; nobody else does.
+   */
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  commissionPct!: number;
+
   @IsOptional()
   @IsString()
   @MaxLength(4000)

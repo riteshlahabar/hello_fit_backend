@@ -2,128 +2,52 @@ import { DEFAULT_SETTINGS } from '../settings/settings.defaults';
 import {
   buildPayoutBatch,
   computeEarning,
-  resolveCommissionRule,
-  type CommissionRuleLike,
+  resolveCommissionPercent,
 } from './commission.calculator';
 
 const policy = DEFAULT_SETTINGS.payout;
 
-const context = {
-  instructorId: 'inst-1',
-  serviceId: 'svc-1',
-  categoryId: 'cat-1',
-  trainerCategoryId: 'band-1',
-  on: new Date('2026-11-01'),
-};
-
-const rule = (over: Partial<CommissionRuleLike>): CommissionRuleLike => ({
-  id: 'r',
-  scope: 'GLOBAL',
-  type: 'PERCENT',
-  value: 25,
-  effectiveFrom: new Date('2026-01-01'),
-  isActive: true,
-  ...over,
-});
-
-describe('resolveCommissionRule — specificity order', () => {
-  it('prefers an instructor rule over service, category and global', () => {
-    const picked = resolveCommissionRule(
-      [
-        rule({ id: 'global' }),
-        rule({ id: 'cat', scope: 'CATEGORY', categoryId: 'cat-1' }),
-        rule({ id: 'svc', scope: 'SERVICE', serviceId: 'svc-1' }),
-        rule({ id: 'inst', scope: 'INSTRUCTOR', instructorId: 'inst-1' }),
-      ],
-      context,
-    );
-
-    expect(picked?.id).toBe('inst');
+describe('resolveCommissionPercent — the provider overrides the service', () => {
+  it('uses the service percent when the provider has none', () => {
+    expect(
+      resolveCommissionPercent({ instructorPct: null, servicePct: 25 }),
+    ).toEqual({ percent: 25, source: 'SERVICE' });
   });
 
-  it('prefers service over category', () => {
-    const picked = resolveCommissionRule(
-      [
-        rule({ id: 'cat', scope: 'CATEGORY', categoryId: 'cat-1' }),
-        rule({ id: 'svc', scope: 'SERVICE', serviceId: 'svc-1' }),
-      ],
-      context,
-    );
-
-    expect(picked?.id).toBe('svc');
+  it('uses the provider percent when it is set', () => {
+    expect(
+      resolveCommissionPercent({ instructorPct: 40, servicePct: 25 }),
+    ).toEqual({ percent: 40, source: 'INSTRUCTOR' });
   });
 
-  it('falls back to global when nothing specific matches', () => {
-    const picked = resolveCommissionRule(
-      [
-        rule({ id: 'global' }),
-        rule({ id: 'other', scope: 'INSTRUCTOR', instructorId: 'someone-else' }),
-      ],
-      context,
-    );
-
-    expect(picked?.id).toBe('global');
+  it('treats a provider percent of zero as a real override, not absence', () => {
+    expect(
+      resolveCommissionPercent({ instructorPct: 0, servicePct: 25 }),
+    ).toEqual({ percent: 0, source: 'INSTRUCTOR' });
   });
 
-  it('ignores inactive rules', () => {
-    const picked = resolveCommissionRule(
-      [rule({ id: 'off', isActive: false })],
-      context,
-    );
-
-    expect(picked).toBeNull();
+  it('clamps a percent above 100', () => {
+    expect(
+      resolveCommissionPercent({ instructorPct: 250, servicePct: 25 }).percent,
+    ).toBe(100);
   });
 
-  it('ignores a rule not yet effective', () => {
-    const picked = resolveCommissionRule(
-      [rule({ id: 'future', effectiveFrom: new Date('2027-01-01') })],
-      context,
-    );
-
-    expect(picked).toBeNull();
-  });
-
-  it('ignores an expired rule', () => {
-    const picked = resolveCommissionRule(
-      [rule({ id: 'past', effectiveTo: new Date('2026-06-01') })],
-      context,
-    );
-
-    expect(picked).toBeNull();
-  });
-
-  it('within one scope, uses the most recently effective rule', () => {
-    const picked = resolveCommissionRule(
-      [
-        rule({ id: 'old', effectiveFrom: new Date('2026-01-01') }),
-        rule({ id: 'new', effectiveFrom: new Date('2026-10-01') }),
-      ],
-      context,
-    );
-
-    expect(picked?.id).toBe('new');
-  });
-
-  it('does not retroactively apply a rate change to an older session', () => {
-    const picked = resolveCommissionRule(
-      [
-        rule({ id: 'old', effectiveFrom: new Date('2026-01-01') }),
-        rule({ id: 'new', effectiveFrom: new Date('2026-10-01') }),
-      ],
-      { ...context, on: new Date('2026-05-01') },
-    );
-
-    expect(picked?.id).toBe('old');
+  it('clamps a negative percent to zero', () => {
+    expect(
+      resolveCommissionPercent({ instructorPct: null, servicePct: -5 }).percent,
+    ).toBe(0);
   });
 });
 
 describe('computeEarning', () => {
   const completedAt = new Date('2026-11-01T10:00:00Z');
+  const at = (percent: number, source: 'SERVICE' | 'INSTRUCTOR' = 'SERVICE') =>
+    ({ percent, source }) as const;
 
-  it('applies a percentage rule', () => {
+  it('takes the commission as a percentage of the session value', () => {
     const result = computeEarning(
       { sessionValue: 1000, completedAt },
-      rule({ type: 'PERCENT', value: 25 }),
+      at(25),
       policy,
     );
 
@@ -131,41 +55,31 @@ describe('computeEarning', () => {
     expect(result.netAmount).toBe(750);
   });
 
-  it('applies a flat rule', () => {
-    const result = computeEarning(
-      { sessionValue: 1000, completedAt },
-      rule({ type: 'FLAT', value: 300 }),
-      policy,
-    );
-
-    expect(result.commissionAmount).toBe(300);
-    expect(result.netAmount).toBe(700);
-  });
-
-  it('uses the default percentage when no rule matches', () => {
-    const result = computeEarning(
-      { sessionValue: 1000, completedAt },
-      null,
-      policy,
-    );
-
-    expect(result.commissionAmount).toBe(250);
-  });
-
   it('subtracts deductions from the net', () => {
     const result = computeEarning(
       { sessionValue: 1000, completedAt, deductions: 100 },
-      rule({ value: 25 }),
+      at(25),
       policy,
     );
 
     expect(result.netAmount).toBe(650);
   });
 
-  it('never produces a negative net from a misconfigured flat rule', () => {
+  it('pays the whole session value out when commission is zero', () => {
+    const result = computeEarning(
+      { sessionValue: 1000, completedAt },
+      at(0, 'INSTRUCTOR'),
+      policy,
+    );
+
+    expect(result.commissionAmount).toBe(0);
+    expect(result.netAmount).toBe(1000);
+  });
+
+  it('never produces a negative net', () => {
     const result = computeEarning(
       { sessionValue: 500, completedAt },
-      rule({ type: 'FLAT', value: 9999 }),
+      at(100),
       policy,
     );
 
@@ -173,10 +87,21 @@ describe('computeEarning', () => {
     expect(result.netAmount).toBe(0);
   });
 
+  it('rounds to two places rather than carrying fractions of a paisa', () => {
+    const result = computeEarning(
+      { sessionValue: 999.99, completedAt },
+      at(12.5),
+      policy,
+    );
+
+    expect(result.commissionAmount).toBe(125);
+    expect(result.netAmount).toBe(874.99);
+  });
+
   it('sets payableFrom to the end of the dispute window', () => {
     const result = computeEarning(
       { sessionValue: 1000, completedAt },
-      null,
+      at(25),
       policy,
     );
 
@@ -184,14 +109,15 @@ describe('computeEarning', () => {
     expect(result.payableFrom.toISOString()).toBe('2026-11-03T10:00:00.000Z');
   });
 
-  it('records which rule was used, so the teacher can be shown the basis', () => {
+  it('records the percent and where it came from, so the basis can be shown', () => {
     const result = computeEarning(
       { sessionValue: 1000, completedAt },
-      rule({ id: 'rule-xyz' }),
+      at(40, 'INSTRUCTOR'),
       policy,
     );
 
-    expect(result.commissionRuleId).toBe('rule-xyz');
+    expect(result.commissionPercent).toBe(40);
+    expect(result.commissionSource).toBe('INSTRUCTOR');
   });
 });
 

@@ -47,6 +47,17 @@ export class UpdateServiceDto {
   @Max(480)
   durationMin?: number;
 
+  /**
+   * The trainer's cut, as a percent. Optional here only because every field
+   * is — absent leaves it alone. It can never be cleared: the column is
+   * NOT NULL (client, 19 Nov 2026).
+   */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  commissionPct?: number;
+
   @IsOptional()
   @IsString()
   @MaxLength(4000)

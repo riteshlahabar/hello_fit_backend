@@ -3,109 +3,59 @@ import type { PayoutPolicy } from '../settings/settings.defaults';
 /**
  * Commission and earning arithmetic (spec 3.7). Pure, because this is the
  * calculation a teacher will dispute: it must be reproducible from the stored
- * rule and the session value alone.
- */
-
-export type CommissionScopeName =
-  | 'GLOBAL'
-  | 'CATEGORY'
-  | 'SERVICE'
-  | 'TRAINER_CATEGORY'
-  | 'INSTRUCTOR';
-
-export interface CommissionRuleLike {
-  id: string;
-  scope: CommissionScopeName;
-  categoryId?: string | null;
-  serviceId?: string | null;
-  trainerCategoryId?: string | null;
-  instructorId?: string | null;
-  type: 'PERCENT' | 'FLAT';
-  value: number;
-  effectiveFrom: Date;
-  effectiveTo?: Date | null;
-  isActive: boolean;
-}
-
-export interface CommissionContext {
-  instructorId: string;
-  serviceId: string;
-  categoryId: string;
-  /** The provider's band — Basic / Standard / Premium / Elite. Null when unset. */
-  trainerCategoryId: string | null;
-  /** Session date, so a rule change does not retroactively alter old earnings. */
-  on: Date;
-}
-
-/**
- * Specificity order: instructor, then the provider's band, then service, then
- * service category, then global.
+ * percentages and the session value alone.
  *
- * TRAINER_CATEGORY sits second because it is the normal place to set a rate
- * (client, 17 Nov 2026) — one row covers every provider in the band — while an
- * INSTRUCTOR row stays above it as the per-provider override for a special deal.
+ * Commission stopped being a rule table on 19 Nov 2026 (client). It is now two
+ * columns: `Service.commissionPct`, compulsory on every service, and
+ * `InstructorProfile.commissionPct`, an optional per-provider override. The
+ * `commission_rules` table still exists but nothing reads it.
  */
-const SCOPE_PRIORITY: Record<CommissionScopeName, number> = {
-  INSTRUCTOR: 0,
-  TRAINER_CATEGORY: 1,
-  SERVICE: 2,
-  CATEGORY: 3,
-  GLOBAL: 4,
-};
+
+export type CommissionSourceName = 'INSTRUCTOR' | 'SERVICE';
+
+export interface CommissionInput {
+  /** The provider's own percent, or null to use the service's. */
+  instructorPct: number | null;
+  /** Compulsory on every service, so there is always a percent to fall to. */
+  servicePct: number;
+}
+
+export interface ResolvedCommission {
+  percent: number;
+  source: CommissionSourceName;
+}
 
 /**
- * Picks the first matching rule by specificity. Within one scope the most
- * recently effective rule wins, so scheduling a future rate change is simply
- * inserting a row with a later effectiveFrom.
+ * The provider's percent wins when it is set; otherwise the service's.
+ *
+ * A negative or absurd percent is clamped to 0–100 here rather than at the
+ * call site, so a bad row can never produce a negative payable.
  */
-export function resolveCommissionRule(
-  rules: CommissionRuleLike[],
-  context: CommissionContext,
-): CommissionRuleLike | null {
-  const applicable = rules.filter((rule) => {
-    if (!rule.isActive) return false;
-    if (rule.effectiveFrom > context.on) return false;
-    if (rule.effectiveTo && rule.effectiveTo < context.on) return false;
+export function resolveCommissionPercent(
+  input: CommissionInput,
+): ResolvedCommission {
+  const hasOverride =
+    input.instructorPct !== null && Number.isFinite(input.instructorPct);
 
-    switch (rule.scope) {
-      case 'INSTRUCTOR':
-        return rule.instructorId === context.instructorId;
-      case 'TRAINER_CATEGORY':
-        return (
-          context.trainerCategoryId !== null &&
-          rule.trainerCategoryId === context.trainerCategoryId
-        );
-      case 'SERVICE':
-        return rule.serviceId === context.serviceId;
-      case 'CATEGORY':
-        return rule.categoryId === context.categoryId;
-      case 'GLOBAL':
-        return true;
-    }
-  });
-
-  if (applicable.length === 0) return null;
-
-  return applicable.sort(
-    (a, b) =>
-      SCOPE_PRIORITY[a.scope] - SCOPE_PRIORITY[b.scope] ||
-      b.effectiveFrom.getTime() - a.effectiveFrom.getTime(),
-  )[0];
+  return hasOverride
+    ? { percent: clampPercent(input.instructorPct as number), source: 'INSTRUCTOR' }
+    : { percent: clampPercent(input.servicePct), source: 'SERVICE' };
 }
 
 export interface EarningBreakup {
   sessionValue: number;
   commissionAmount: number;
+  commissionPercent: number;
+  commissionSource: CommissionSourceName;
   deductions: number;
   netAmount: number;
-  commissionRuleId: string | null;
   /** When this earning leaves PENDING and becomes payable. */
   payableFrom: Date;
 }
 
 /**
  * Builds the earning row for a completed session. Commission is capped at the
- * session value so a misconfigured flat rule can never produce a negative
+ * session value so a misconfigured percent can never produce a negative
  * payable.
  */
 export function computeEarning(
@@ -114,17 +64,14 @@ export function computeEarning(
     completedAt: Date;
     deductions?: number;
   },
-  rule: CommissionRuleLike | null,
+  commission: ResolvedCommission,
   policy: PayoutPolicy,
 ): EarningBreakup {
-  const commissionRaw = rule
-    ? rule.type === 'PERCENT'
-      ? (input.sessionValue * rule.value) / 100
-      : rule.value
-    : (input.sessionValue * policy.defaultCommissionPercent) / 100;
-
   const commissionAmount = round2(
-    Math.min(Math.max(commissionRaw, 0), input.sessionValue),
+    Math.min(
+      Math.max((input.sessionValue * commission.percent) / 100, 0),
+      input.sessionValue,
+    ),
   );
   const deductions = round2(input.deductions ?? 0);
   const netAmount = round2(
@@ -134,9 +81,10 @@ export function computeEarning(
   return {
     sessionValue: round2(input.sessionValue),
     commissionAmount,
+    commissionPercent: commission.percent,
+    commissionSource: commission.source,
     deductions,
     netAmount,
-    commissionRuleId: rule?.id ?? null,
     payableFrom: new Date(
       input.completedAt.getTime() + policy.disputeWindowHours * 3_600_000,
     ),
@@ -176,5 +124,8 @@ export function buildPayoutBatch(
     meetsMinimum: net >= policy.minimumPayoutAmount,
   };
 }
+
+const clampPercent = (value: number): number =>
+  Math.min(Math.max(Number.isFinite(value) ? value : 0, 0), 100);
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;

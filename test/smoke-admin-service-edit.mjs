@@ -31,6 +31,7 @@ await s.withAdmin(async () => {
       categoryId: categories[0],
       name: `Edit Me ${tag}`,
       basePrice: 600,
+      commissionPct: 25,
       durationMin: 60,
     },
     201,
@@ -52,6 +53,7 @@ await s.withAdmin(async () => {
   const moved = await s.call('PATCH', `/admin/catalog/services/${id}`, {
     categoryId: categories[1],
     basePrice: 850,
+    commissionPct: 25,
     durationMin: 90,
     isActive: false,
   });
@@ -64,7 +66,7 @@ await s.withAdmin(async () => {
   const other = await s.call(
     'POST',
     '/admin/catalog/services',
-    { categoryId: categories[0], name: `Neighbour ${tag}`, basePrice: 400, durationMin: 60 },
+    { categoryId: categories[0], name: `Neighbour ${tag}`, basePrice: 400, commissionPct: 25, durationMin: 60 },
     201,
   );
   made.push(other?.data?.id);

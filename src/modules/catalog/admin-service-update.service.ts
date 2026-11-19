@@ -46,6 +46,9 @@ export class AdminServiceUpdateService {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(slug !== undefined && { slug }),
         ...(dto.basePrice !== undefined && { basePrice: dto.basePrice }),
+        ...(dto.commissionPct !== undefined && {
+          commissionPct: dto.commissionPct,
+        }),
         ...(dto.durationMin !== undefined && { durationMin: dto.durationMin }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.equipment !== undefined && { equipment: dto.equipment }),
@@ -72,12 +75,14 @@ export class AdminServiceUpdateService {
         slug: service.slug,
         categoryId: service.categoryId,
         basePrice: Number(service.basePrice),
+        commissionPct: Number(service.commissionPct),
       },
       after: {
         name: updated.name,
         slug: updated.slug,
         categoryId: updated.categoryId,
         basePrice: Number(updated.basePrice),
+        commissionPct: Number(updated.commissionPct),
       },
       ipAddress: actor.ipAddress,
       requestId: actor.requestId,
@@ -85,7 +90,11 @@ export class AdminServiceUpdateService {
 
     // Bookings already made keep the gross they were created with; only the
     // next quote reads the new rate.
-    return { ...updated, basePrice: Number(updated.basePrice) };
+    return {
+      ...updated,
+      basePrice: Number(updated.basePrice),
+      commissionPct: Number(updated.commissionPct),
+    };
   }
 
   private async require(id: string) {
@@ -97,6 +106,7 @@ export class AdminServiceUpdateService {
         slug: true,
         categoryId: true,
         basePrice: true,
+        commissionPct: true,
       },
     });
 

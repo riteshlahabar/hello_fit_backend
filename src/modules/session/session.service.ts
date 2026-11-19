@@ -16,8 +16,7 @@ import {
 } from '../../common/dates/calendar';
 import {
   computeEarning,
-  resolveCommissionRule,
-  type CommissionRuleLike,
+  resolveCommissionPercent,
 } from '../payout/commission.calculator';
 
 /** How close the teacher must be for the geo-fence to pass (spec 3.4). */
@@ -300,53 +299,31 @@ export class SessionService {
   }) {
     const payoutPolicy = this.settings.get('payout');
 
-    const service = await this.prisma.service.findUniqueOrThrow({
-      where: { id: params.session.serviceId },
-      select: { categoryId: true },
-    });
+    // The service states the commission; a provider with their own percent
+    // overrides it (client, 19 Nov 2026 — state/pricing-rules.md).
+    const [service, provider] = await Promise.all([
+      this.prisma.service.findUniqueOrThrow({
+        where: { id: params.session.serviceId },
+        select: { commissionPct: true },
+      }),
+      this.prisma.instructorProfile.findUniqueOrThrow({
+        where: { id: params.instructorId },
+        select: { commissionPct: true },
+      }),
+    ]);
 
-    // The provider's band decides the commission unless a per-provider rule
-    // overrides it (client, 17 Nov 2026 — state/pricing-rules.md).
-    const provider = await this.prisma.instructorProfile.findUniqueOrThrow({
-      where: { id: params.instructorId },
-      select: { trainerCategoryId: true },
+    const commission = resolveCommissionPercent({
+      instructorPct:
+        provider.commissionPct === null ? null : Number(provider.commissionPct),
+      servicePct: Number(service.commissionPct),
     });
-
-    const rules = await this.prisma.commissionRule.findMany({
-      where: { isActive: true, deletedAt: null },
-    });
-
-    const rule = resolveCommissionRule(
-      rules.map(
-        (r): CommissionRuleLike => ({
-          id: r.id,
-          scope: r.scope,
-          categoryId: r.categoryId,
-          serviceId: r.serviceId,
-          trainerCategoryId: r.trainerCategoryId,
-          instructorId: r.instructorId,
-          type: r.type,
-          value: Number(r.value),
-          effectiveFrom: r.effectiveFrom,
-          effectiveTo: r.effectiveTo,
-          isActive: r.isActive,
-        }),
-      ),
-      {
-        instructorId: params.instructorId,
-        serviceId: params.session.serviceId,
-        categoryId: service.categoryId,
-        trainerCategoryId: provider.trainerCategoryId,
-        on: params.completedAt,
-      },
-    );
 
     const earning = computeEarning(
       {
         sessionValue: Number(params.session.sessionValue),
         completedAt: params.completedAt,
       },
-      rule,
+      commission,
       payoutPolicy,
     );
 
@@ -383,7 +360,7 @@ export class SessionService {
           netAmount: earning.netAmount,
           status: 'PENDING',
           payableFrom: earning.payableFrom,
-          commissionRuleId: earning.commissionRuleId,
+          commissionRuleId: null,
         },
         update: {},
       });

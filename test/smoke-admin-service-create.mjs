@@ -36,6 +36,7 @@ await s.withAdmin(async () => {
       categoryId,
       name: `Solo Service ${tag}`,
       basePrice: 600,
+      commissionPct: 25,
       durationMin: 60,
       description: 'Made by the admin panel.',
     },
@@ -51,7 +52,7 @@ await s.withAdmin(async () => {
   const clash = await s.call(
     'POST',
     '/admin/catalog/services',
-    { categoryId, name: `Solo Service ${tag}`, basePrice: 500, durationMin: 60 },
+    { categoryId, name: `Solo Service ${tag}`, basePrice: 500, commissionPct: 25, durationMin: 60 },
     409,
   );
   s.check('duplicate slug', s.errorCode(clash), 'DUPLICATE_RESOURCE');
@@ -62,14 +63,15 @@ await s.withAdmin(async () => {
       categoryId: '00000000-0000-4000-8000-000000000000',
       name: `Orphan ${tag}`,
       basePrice: 500,
+      commissionPct: 25,
       durationMin: 60,
     },
     404,
   );
   // Duration below 15 minutes, a negative price and a missing name.
-  await s.call('POST', '/admin/catalog/services', { categoryId, name: `Short ${tag}`, basePrice: 500, durationMin: 5 }, 400);
-  await s.call('POST', '/admin/catalog/services', { categoryId, name: `Free ${tag}`, basePrice: -1, durationMin: 60 }, 400);
-  await s.call('POST', '/admin/catalog/services', { categoryId, basePrice: 500, durationMin: 60 }, 400);
+  await s.call('POST', '/admin/catalog/services', { categoryId, name: `Short ${tag}`, basePrice: 500, commissionPct: 25, durationMin: 5 }, 400);
+  await s.call('POST', '/admin/catalog/services', { categoryId, name: `Free ${tag}`, basePrice: -1, commissionPct: 25, durationMin: 60 }, 400);
+  await s.call('POST', '/admin/catalog/services', { categoryId, basePrice: 500, commissionPct: 25, durationMin: 60 }, 400);
 
   s.section('edit lives in smoke:admin-service-edit');
   await s.call('PATCH', `/admin/catalog/services/${made[0]}`, { name: `Solo Service ${tag}` }, 200);

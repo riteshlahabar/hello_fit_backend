@@ -37,6 +37,7 @@ export async function createProvider(db, stamp) {
       slug: `aerial-hoop-${stamp}`,
       durationMin: 60,
       basePrice: 900,
+      commissionPct: 25,
     },
   });
 
@@ -58,7 +59,9 @@ export async function createProvider(db, stamp) {
       // Active but NOT approved: the suite's first assertion is that this
       // state is invisible, so approval has to be the administrator's doing.
       instructorServices: {
-        create: { serviceId: service.id, customPrice: 850, isActive: true },
+        // Provider-set pricing was removed on 17-11-2026 — the rate is
+        // Service.basePrice and the same whoever delivers the session.
+        create: { serviceId: service.id, isActive: true },
       },
       instructorServiceAreas: { create: { areaId: area.id } },
     },

@@ -69,8 +69,9 @@ await s.withAdmin(async () => {
   s.check('offerings returned', Array.isArray(admin?.data?.offerings), true);
   s.check('one offering', admin?.data?.offerings?.length, 1);
   s.check('approval state is visible', Boolean(admin?.data?.offerings?.[0]?.approvedAt), true);
-  s.check('the provider price is there', admin?.data?.offerings?.[0]?.customPrice, '850');
-  s.check('the base price is there too', admin?.data?.offerings?.[0]?.service?.basePrice, '900');
+  // Provider-set pricing went on 17-11-2026: the rate is the service's and
+  // the same whoever delivers it (state/pricing-rules.md).
+  s.check('the base price is the only price', admin?.data?.offerings?.[0]?.service?.basePrice, '900');
   s.check('category named for the column', admin?.data?.offerings?.[0]?.service?.category?.name?.includes(stamp), true);
   s.check('session formats readable', admin?.data?.sessionFormats?.length, 2);
 
@@ -103,7 +104,7 @@ await s.withAdmin(async () => {
 const detail = await s.call('GET', `/providers/${made.providerId}`, undefined, 200, 'none');
 s.check('detail reachable', detail?.data?.id, made.providerId);
 s.check('name correct', detail?.data?.name?.includes(stamp), true);
-s.check('its own price, not the base', detail?.data?.services?.[0]?.price, 850);
+s.check('the service base price, not a provider price', detail?.data?.services?.[0]?.price, 900);
 s.check('service belongs to the provider', detail?.data?.services?.length, 1);
 s.check('supported areas listed (§5.6)', detail?.data?.areas?.length, 1);
 s.check('area carries its city', detail?.data?.areas?.[0]?.city?.id, made.cityId);

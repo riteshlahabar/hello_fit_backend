@@ -125,18 +125,20 @@ export function deriveKycStatus(
 
 // -------------------------------------------------------------------- profile
 
-/** Fields an applicant must fill before the application is reviewable. */
+/**
+ * Fields an applicant must fill before the application is reviewable.
+ *
+ * `languages` and `homeBase` were dropped on 19 Nov 2026 (client): neither has
+ * a screen anywhere in the 74-page design pack, so the gate could never be
+ * passed from the app. **`homeBaseLat/Lng` stay on the profile** — they feed
+ * distance ranking in `provider-search` (§5.5, §5.6) — they are simply no
+ * longer demanded at submission.
+ */
 export function missingProfileFields(applicant: ApplicantLike): string[] {
   const missing: string[] = [];
   if (applicant.name.trim().length === 0) missing.push('name');
   if (!applicant.bio || applicant.bio.trim().length === 0) missing.push('bio');
-  if (applicant.languages.length === 0) missing.push('languages');
   if (applicant.specialisations.length === 0) missing.push('specialisations');
-  // The home base is what distance scoring measures from; without it the
-  // applicant can never be ranked for a booking.
-  if (applicant.homeBaseLat == null || applicant.homeBaseLng == null) {
-    missing.push('homeBase');
-  }
   return missing;
 }
 
