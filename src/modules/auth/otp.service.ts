@@ -11,6 +11,8 @@ export const OTP_MAX_ATTEMPTS = 5;
 /** How many OTPs one mobile may request inside the window. */
 export const OTP_MAX_SENDS_PER_WINDOW = 5;
 export const OTP_SEND_WINDOW_MINUTES = 15;
+/** Non-production fixed code, so manual app testing needs no SMS. */
+export const DEV_FIXED_OTP = '123456';
 
 export type OtpVerifyResult =
   | { ok: true; otpRequestId: string }
@@ -111,6 +113,10 @@ export class OtpService {
 
   /** Cryptographically random, not Math.random. */
   private generateCode(): string {
+    if (process.env.NODE_ENV !== 'production') {
+      return DEV_FIXED_OTP;
+    }
+
     const max = 10 ** OTP_LENGTH;
     return randomInt(0, max).toString().padStart(OTP_LENGTH, '0');
   }
