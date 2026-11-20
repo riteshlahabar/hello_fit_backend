@@ -187,7 +187,15 @@ check('and it expires', link?.data?.expiresInSeconds > 0, true);
 
 const fileRes = await fetch(link?.data?.url?.startsWith('http') ? link.data.url : `http://localhost:3000${link.data.url}`);
 check('the signed URL serves the file', fileRes.status, 200);
-check('served as an attachment, never inline', fileRes.headers.get('content-disposition'), 'attachment');
+// Inline since 20-11-2026, and deliberately. `attachment` made the admin
+// panel's View button useless — a tab opened on a download closes itself, so
+// the reviewer saw it vanish and the file went to Downloads. The XSS that rule
+// guarded against needs `text/html` or `image/svg+xml`; neither can get here,
+// because `extensionFor` only ever writes .jpg/.png/.webp/.pdf and anything
+// else resolves to `application/octet-stream`, which still downloads. The
+// `nosniff` header below is what holds the declared type in place.
+check('a known type is served inline, so View can show it', fileRes.headers.get('content-disposition'), 'inline');
+check('and the type cannot be sniffed past', fileRes.headers.get('x-content-type-options'), 'nosniff');
 check('and is not cacheable', fileRes.headers.get('cache-control'), 'no-store, private');
 
 const tampered = await fetch(

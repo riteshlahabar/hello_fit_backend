@@ -83,12 +83,24 @@ export class FileDownloadController {
       });
     }
 
-    res.setHeader('Content-Type', contentTypeFor(key));
+    const contentType = contentTypeFor(key);
+
+    res.setHeader('Content-Type', contentType);
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    // Never inline: an uploaded SVG or HTML rendered in-origin would be XSS.
-    // Browsers ignore this for an `<img>` subresource, which is how the photo
-    // still renders, and honour it for a navigation, which is the risk.
-    res.setHeader('Content-Disposition', 'attachment');
+    // `attachment` on everything made the admin panel's "View" button useless:
+    // a tab opened on a download closes itself at once, so the reviewer saw it
+    // flash and vanish and the file landed in Downloads instead.
+    //
+    // The XSS this guarded against needs `text/html` or `image/svg+xml`, and
+    // neither can get here: `extensionFor` only ever writes the four
+    // extensions in `CONTENT_TYPES`, so an unknown key resolves to
+    // `application/octet-stream` and still downloads. With `nosniff` beside it
+    // the browser honours the declared type and nothing else, and a PDF's own
+    // scripting stays inside the viewer's sandbox rather than this origin.
+    res.setHeader(
+      'Content-Disposition',
+      contentType === 'application/octet-stream' ? 'attachment' : 'inline',
+    );
 
     if (isPublicKey(key)) {
       // A photo is immutable — a replacement gets a new UUID — so it can be
