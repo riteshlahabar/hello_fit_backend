@@ -68,7 +68,8 @@
     "smoke:commission": "node -r dotenv/config test/smoke-commission.mjs",
     "smoke:trainer-documents": "node -r dotenv/config test/smoke-trainer-documents.mjs",
     "smoke:trainer-registration": "node -r dotenv/config test/smoke-trainer-registration.mjs",
-    "smoke:trainer-tabs": "node -r dotenv/config test/smoke-trainer-tabs.mjs"
+    "smoke:trainer-tabs": "node -r dotenv/config test/smoke-trainer-tabs.mjs",
+    "smoke:admin-trainer-services": "node -r dotenv/config test/smoke-admin-trainer-services.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

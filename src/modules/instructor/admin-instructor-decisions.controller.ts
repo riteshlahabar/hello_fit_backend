@@ -90,7 +90,7 @@ export class AdminInstructorDecisionsController {
     };
   }
 
-  /** Branch, daily cap, travel buffer and radius — the scheduling inputs. */
+  /** Branch, daily cap, the services they may deliver, and the commission. */
   @Patch(':id')
   @RequirePermissions('instructors:edit')
   async update(

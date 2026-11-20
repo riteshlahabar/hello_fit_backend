@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsInt,
@@ -86,9 +88,15 @@ export class ChangeOnboardingStageDto {
 }
 
 /**
- * Ops-owned scheduling fields, separate from the teacher's own profile PATCH.
- * These are the numbers the slot grid and the clash check run on, so the
- * teacher may not set them.
+ * Ops-owned fields, separate from the teacher's own profile PATCH: the branch,
+ * the daily cap the slot grid runs on, the services they are allowed to
+ * deliver, and the commission override.
+ *
+ * **Travel buffer and travel radius are deliberately absent** (client,
+ * 20-11-2026 — "remove travel buffer and travel radius"). The columns stay:
+ * `travelBufferMin` falls back to `scheduling.defaultTravelBufferMin` and the
+ * provider sets their own `travelRadiusKm` from the trainer app. Admin no
+ * longer touches either, so there is no field here to touch them with.
  */
 export class AdminUpdateInstructorDto {
   @IsOptional()
@@ -101,18 +109,21 @@ export class AdminUpdateInstructorDto {
   @Max(12)
   dailySessionCap?: number;
 
-  /** Minutes blocked either side of a session so travel never double-books. */
+  /**
+   * Which services this provider delivers (client, 20-11-2026). **The whole
+   * set, not a delta** — an id left out is withdrawn, which is what a
+   * multi-select on the Edit dialog means.
+   *
+   * The admin's pick *is* PDF 6.5's "manage permitted service visibility":
+   * what is chosen here is published, and the separate publish/unpublish
+   * action is gone from the row menu. Safe because `PUBLIC_PROVIDER` still
+   * demands `kycStatus: VERIFIED` before anyone reaches the website.
+   */
   @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(180)
-  travelBufferMin?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  travelRadiusKm?: number;
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('4', { each: true })
+  serviceIds?: string[];
 
   /**
    * Per-provider commission override as a percent (client, 19-11-2026).

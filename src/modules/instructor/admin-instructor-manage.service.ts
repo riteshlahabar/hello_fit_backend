@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InstructorRepository } from './instructor.repository';
 import { InstructorProfileLookup } from './instructor-profile.lookup';
 import { profileDates } from './instructor-view';
+import { setInstructorServices } from './offering-assign';
 import { setOfferingApproval } from './offering-approval';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -44,18 +45,19 @@ export class AdminInstructorManageService {
       });
     }
 
+    // Before the profile write, because this is the half that can be refused —
+    // a retired service id must not leave the branch already changed.
+    const services =
+      dto.serviceIds === undefined
+        ? null
+        : await setInstructorServices(this.prisma, profile.id, dto.serviceIds);
+
     const updated = await this.repo.updateProfile(profile.id, {
       ...(dto.branchId !== undefined && {
         branch: { connect: { id: dto.branchId } },
       }),
       ...(dto.dailySessionCap !== undefined && {
         dailySessionCap: dto.dailySessionCap,
-      }),
-      ...(dto.travelBufferMin !== undefined && {
-        travelBufferMin: dto.travelBufferMin,
-      }),
-      ...(dto.travelRadiusKm !== undefined && {
-        travelRadiusKm: dto.travelRadiusKm,
       }),
       // Explicit null clears the override and falls back to the service's own
       // percent, so `!== undefined` rather than a truthiness check.
@@ -72,14 +74,12 @@ export class AdminInstructorManageService {
       before: {
         branchId: profile.branchId,
         dailySessionCap: profile.dailySessionCap,
-        travelBufferMin: profile.travelBufferMin,
-        travelRadiusKm: profile.travelRadiusKm,
+        ...(services && { serviceIds: services.before }),
       },
       after: {
         branchId: updated.branchId,
         dailySessionCap: updated.dailySessionCap,
-        travelBufferMin: updated.travelBufferMin,
-        travelRadiusKm: updated.travelRadiusKm,
+        ...(services && { serviceIds: services.after }),
       },
       ipAddress: actor.ipAddress,
       requestId: actor.requestId,

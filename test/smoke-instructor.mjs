@@ -324,7 +324,7 @@ await withTemporaryAdmin(async ({ email, password }) => {
   await call(
     'PATCH',
     `/admin/instructors/${instructorId}`,
-    { dailySessionCap: 5, travelBufferMin: 45 },
+    { dailySessionCap: 5 },
     200,
     true,
   );

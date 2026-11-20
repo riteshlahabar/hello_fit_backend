@@ -111,6 +111,18 @@ export class InstructorRepository {
         include: {
           user: { select: { id: true, mobile: true, status: true } },
           branch: { select: { id: true, name: true } },
+          // What the Edit dialog's Services multi-select starts on (client,
+          // 20-11-2026). Carried on the list row rather than fetched per
+          // dialog: the admin panel opens Edit from the row it already has,
+          // and a detail call per open would be one request per click.
+          instructorServices: {
+            where: { deletedAt: null, isActive: true },
+            select: {
+              serviceId: true,
+              service: { select: { id: true, name: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       }),
       this.prisma.instructorProfile.count({ where }),
