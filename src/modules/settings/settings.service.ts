@@ -10,6 +10,11 @@ import {
  * Reads the admin-configurable policy values, falling back to the spec
  * defaults. Cached in memory because slot search and pricing read these on
  * every request; `invalidate()` is called whenever an admin saves a setting.
+ *
+ * **An `app_settings` row beats `settings.defaults.ts`, and the cache is only
+ * filled at module init.** So editing a default has no effect while a row
+ * overrides that group, and editing the row by hand has no effect until the
+ * process restarts — there is no reload route. Change both, then restart.
  */
 @Injectable()
 export class SettingsService implements OnModuleInit {

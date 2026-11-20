@@ -19,6 +19,17 @@ import type { DocumentType, VerifyStatus } from '../../generated/prisma/enums';
 
 const policy: OnboardingPolicy = DEFAULT_SETTINGS.onboarding;
 
+/**
+ * The five-stage pipeline. The defaults have screening and demo off
+ * (client, 20-11-2026), so the tests that exercise those optional steps opt
+ * back in here rather than asserting against a policy nobody runs.
+ */
+const fullPolicy: OnboardingPolicy = {
+  ...policy,
+  screeningCallRequired: true,
+  demoSessionRequired: true,
+};
+
 const doc = (
   docType: DocumentType,
   verifyStatus: VerifyStatus = 'VERIFIED',
@@ -234,54 +245,46 @@ describe('canApprove', () => {
 });
 
 describe('allowedTransitions', () => {
-  it('moves forward one step and allows rejection', () => {
+  it('offers both decisions straight from APPLIED', () => {
     expect(allowedTransitions(policy, 'APPLIED')).toEqual([
-      'DOCUMENTS_SUBMITTED',
-      'REJECTED',
-    ]);
-  });
-
-  it('allows one step back, so ops can undo a misclick', () => {
-    expect(allowedTransitions(policy, 'SCREENING_CALL')).toEqual([
-      'DOCUMENTS_SUBMITTED',
-      'DEMO_SESSION',
-      'REJECTED',
-    ]);
-  });
-
-  it('does not allow rejecting someone already approved', () => {
-    expect(allowedTransitions(policy, 'APPROVED')).toEqual(['DEMO_SESSION']);
-  });
-
-  it('reopens a rejected application back to APPLIED only', () => {
-    expect(allowedTransitions(policy, 'REJECTED')).toEqual(['APPLIED']);
-  });
-
-  it('skips the demo step when policy disables it', () => {
-    const noDemo = { ...policy, demoSessionRequired: false };
-    expect(allowedTransitions(noDemo, 'SCREENING_CALL')).toEqual([
       'DOCUMENTS_SUBMITTED',
       'APPROVED',
       'REJECTED',
     ]);
   });
 
-  it('skips both optional steps when both are disabled', () => {
-    const minimal = {
-      ...policy,
-      screeningCallRequired: false,
-      demoSessionRequired: false,
-    };
-    expect(allowedTransitions(minimal, 'DOCUMENTS_SUBMITTED')).toEqual([
+  it('allows one step back, so ops can undo a misclick', () => {
+    expect(allowedTransitions(policy, 'DOCUMENTS_SUBMITTED')).toEqual([
       'APPLIED',
       'APPROVED',
       'REJECTED',
     ]);
   });
 
+  it('does not allow rejecting someone already approved', () => {
+    expect(allowedTransitions(policy, 'APPROVED')).toEqual([
+      'DOCUMENTS_SUBMITTED',
+    ]);
+  });
+
+  it('reopens a rejected application, or approves it outright', () => {
+    expect(allowedTransitions(policy, 'REJECTED')).toEqual([
+      'APPLIED',
+      'APPROVED',
+    ]);
+  });
+
+  it('still steps through the optional stages when policy enables them', () => {
+    expect(allowedTransitions(fullPolicy, 'SCREENING_CALL')).toEqual([
+      'DOCUMENTS_SUBMITTED',
+      'DEMO_SESSION',
+      'APPROVED',
+      'REJECTED',
+    ]);
+  });
+
   it('lets ops move an applicant out of a stage the policy has since disabled', () => {
-    const noDemo = { ...policy, demoSessionRequired: false };
-    const next = allowedTransitions(noDemo, 'DEMO_SESSION');
+    const next = allowedTransitions(policy, 'DEMO_SESSION');
     expect(next).toContain('APPROVED');
     expect(next).toContain('REJECTED');
   });
@@ -289,11 +292,13 @@ describe('allowedTransitions', () => {
 
 describe('canTransition', () => {
   it('permits a legal step', () => {
-    expect(canTransition(policy, 'DEMO_SESSION', 'APPROVED')).toBe(true);
+    expect(canTransition(fullPolicy, 'DEMO_SESSION', 'APPROVED')).toBe(true);
   });
 
-  it('refuses skipping the queue', () => {
-    expect(canTransition(policy, 'APPLIED', 'APPROVED')).toBe(false);
+  // Not the queue any more: admin approves from wherever the applicant sits
+  // and `canApprove` is what refuses an incomplete one.
+  it('permits approval straight from APPLIED', () => {
+    expect(canTransition(policy, 'APPLIED', 'APPROVED')).toBe(true);
   });
 
   it('refuses a transition to the same stage', () => {
@@ -302,16 +307,20 @@ describe('canTransition', () => {
 });
 
 describe('stageProgressPercent', () => {
-  it('runs 0 to 100 across the pipeline', () => {
+  it('runs 0 to 100 across the three live stages', () => {
     expect(stageProgressPercent(policy, 'APPLIED')).toBe(0);
-    expect(stageProgressPercent(policy, 'DOCUMENTS_SUBMITTED')).toBe(25);
-    expect(stageProgressPercent(policy, 'SCREENING_CALL')).toBe(50);
-    expect(stageProgressPercent(policy, 'DEMO_SESSION')).toBe(75);
+    expect(stageProgressPercent(policy, 'DOCUMENTS_SUBMITTED')).toBe(50);
     expect(stageProgressPercent(policy, 'APPROVED')).toBe(100);
   });
 
+  it('runs 0 to 100 across the full pipeline when it is enabled', () => {
+    expect(stageProgressPercent(fullPolicy, 'DOCUMENTS_SUBMITTED')).toBe(25);
+    expect(stageProgressPercent(fullPolicy, 'SCREENING_CALL')).toBe(50);
+    expect(stageProgressPercent(fullPolicy, 'DEMO_SESSION')).toBe(75);
+  });
+
   it('rescales when a step is disabled, so nobody is stranded below 100', () => {
-    const noDemo = { ...policy, demoSessionRequired: false };
+    const noDemo = { ...fullPolicy, demoSessionRequired: false };
     expect(stageProgressPercent(noDemo, 'SCREENING_CALL')).toBe(67);
     expect(stageProgressPercent(noDemo, 'APPROVED')).toBe(100);
   });

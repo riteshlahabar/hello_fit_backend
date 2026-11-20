@@ -238,16 +238,24 @@ await withTemporaryAdmin(async ({ email, password }) => {
   const detail = await call('GET', `/admin/instructors/${instructorId}`, null, 200, true);
   check('approval is blocked on verification', detail?.data?.approval?.ok, false);
   check(
-    'and the allowed next stages are listed',
-    detail?.data?.allowedStages?.includes('SCREENING_CALL'),
+    'APPROVED is offered from here (the two middle stages are gone)',
+    detail?.data?.allowedStages?.includes('APPROVED'),
     true,
   );
+  check(
+    'and the dropped stages are not offered',
+    detail?.data?.allowedStages?.some((s) =>
+      ['SCREENING_CALL', 'DEMO_SESSION'].includes(s),
+    ),
+    false,
+  );
 
-  // Approving before verification is refused, however the stage got here.
+  // A legal transition, refused on the documents. That gate is now the only
+  // thing standing between APPLIED and APPROVED, so it carries the weight.
   console.log('\n--- approval cannot be clicked past the document checks ---');
   await call('POST', `/admin/instructors/${instructorId}/stage`, { stage: 'APPROVED', reason: 'rush' }, 400, true);
-  await call('POST', `/admin/instructors/${instructorId}/stage`, { stage: 'APPLIED', reason: 'no skipping' }, 200, true);
-  await call('POST', `/admin/instructors/${instructorId}/stage`, { stage: 'DEMO_SESSION', reason: 'skip two' }, 400, true);
+  await call('POST', `/admin/instructors/${instructorId}/stage`, { stage: 'APPLIED', reason: 'reopen' }, 200, true);
+  await call('POST', `/admin/instructors/${instructorId}/stage`, { stage: 'DEMO_SESSION', reason: 'off the pipeline' }, 400, true);
   await call('POST', `/admin/instructors/${instructorId}/stage`, { stage: 'DOCUMENTS_SUBMITTED', reason: 'back on track' }, 200, true);
 
   console.log('\n--- verify the documents ---');
@@ -291,21 +299,21 @@ await withTemporaryAdmin(async ({ email, password }) => {
   check('kyc now VERIFIED', verified?.data?.kycStatus, 'VERIFIED');
   check('approval is open', verified?.data?.approval?.ok, true);
 
-  console.log('\n--- walk the pipeline to APPROVED ---');
-  for (const stage of ['SCREENING_CALL', 'DEMO_SESSION', 'APPROVED']) {
-    const moved = await call(
-      'POST',
-      `/admin/instructors/${instructorId}/stage`,
-      { stage, reason: 'smoke test' },
-      200,
-      true,
-    );
-    check(`moved to ${stage}`, moved?.data?.onboarding?.stage, stage);
-  }
+  console.log('\n--- approve in one decision ---');
+  const moved = await call(
+    'POST',
+    `/admin/instructors/${instructorId}/stage`,
+    { stage: 'APPROVED', reason: 'smoke test' },
+    200,
+    true,
+  );
+  check('moved to APPROVED', moved?.data?.onboarding?.stage, 'APPROVED');
 
   const approved = await call('GET', `/admin/instructors/${instructorId}`, null, 200, true);
   check('joinedAt stamped on approval', typeof approved?.data?.joinedAt === 'string', true);
-  check('an approved teacher cannot be rejected outright', approved?.data?.allowedStages, ['DEMO_SESSION']);
+  check('an approved teacher cannot be rejected outright', approved?.data?.allowedStages, [
+    'DOCUMENTS_SUBMITTED',
+  ]);
 
   console.log('\n--- a verified document is locked to the teacher ---');
   await upload('PAN', {}, 409);

@@ -255,8 +255,11 @@ export const DEFAULT_SETTINGS: HelloFitSettings = {
       'YOGA_CERTIFICATION',
       'POLICE_VERIFICATION',
     ],
-    screeningCallRequired: true,
-    demoSessionRequired: true,
+    // Both off (client, 20-11-2026): the two middle steps were dropped, so
+    // the pipeline is APPLIED -> DOCUMENTS_SUBMITTED -> APPROVED. An override
+    // row in app_settings can switch either back on.
+    screeningCallRequired: false,
+    demoSessionRequired: false,
     maxFileSizeMb: 10,
     allowedMimeTypes: [
       'image/jpeg',

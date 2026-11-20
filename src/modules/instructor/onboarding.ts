@@ -207,15 +207,19 @@ export function canApprove(
  *
  * Rules, in one place so the controller cannot invent a shortcut:
  * - forward one step at a time, skipping any step the policy disables;
- * - `REJECTED` from any non-terminal stage;
- * - back one step, so ops can undo a misclick (`APPROVED` → `DEMO_SESSION`);
- * - `REJECTED` → `APPLIED` to reopen an application.
+ * - **`APPROVED` or `REJECTED` from any non-terminal stage** (client,
+ *   20-11-2026): admin decides straight from the trainer table, so the dialog
+ *   offers those two and nothing else. Approval is *not* loosened by this —
+ *   `canApprove` still gates it on every must-verify document, and the stage
+ *   endpoint checks that separately. This only says the move is legal;
+ * - back one step, so ops can undo a misclick;
+ * - `REJECTED` → `APPLIED` to reopen an application, or straight to `APPROVED`.
  */
 export function allowedTransitions(
   policy: OnboardingPolicy,
   current: OnboardingStage,
 ): OnboardingStage[] {
-  if (current === 'REJECTED') return ['APPLIED'];
+  if (current === 'REJECTED') return ['APPLIED', 'APPROVED'];
 
   const path = STAGE_SEQUENCE.filter(
     (stage) =>
@@ -231,7 +235,10 @@ export function allowedTransitions(
   const next: OnboardingStage[] = [];
   if (index > 0) next.push(path[index - 1]);
   if (index < path.length - 1) next.push(path[index + 1]);
-  if (current !== 'APPROVED') next.push('REJECTED');
+  if (current !== 'APPROVED') {
+    if (!next.includes('APPROVED')) next.push('APPROVED');
+    next.push('REJECTED');
+  }
 
   return next;
 }
