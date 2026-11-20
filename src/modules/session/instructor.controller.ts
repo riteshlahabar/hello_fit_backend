@@ -28,6 +28,7 @@ import {
   Roles,
 } from '../../common/decorators/auth.decorators';
 import { AssignmentService } from '../assignment/assignment.service';
+import { InstructorContextService } from '../trainer-app/instructor-context.service';
 import { SessionService } from './session.service';
 
 export class CheckInDto {
@@ -85,6 +86,7 @@ export class InstructorController {
     private readonly sessions: SessionService,
     private readonly assignment: AssignmentService,
     private readonly prisma: PrismaService,
+    private readonly context: InstructorContextService,
   ) {}
 
   /** Today tab: the day's timeline. */
@@ -235,27 +237,13 @@ export class InstructorController {
     };
   }
 
-  /** The token carries the User id; sessions hang off InstructorProfile. */
-  private async resolveInstructorId(userId: string): Promise<string> {
-    const profile = await this.prisma.instructorProfile.findFirst({
-      where: { userId, deletedAt: null },
-      select: { id: true, status: true, onboardingStage: true },
-    });
-
-    if (!profile) {
-      throw new NotFoundException({
-        code: ErrorCode.NOT_FOUND,
-        message: 'No instructor profile on this account',
-      });
-    }
-
-    if (profile.status !== 'ACTIVE' || profile.onboardingStage !== 'APPROVED') {
-      throw new NotFoundException({
-        code: ErrorCode.FORBIDDEN,
-        message: 'Your teacher account is not active',
-      });
-    }
-
-    return profile.id;
+  /**
+   * The token carries the User id; sessions hang off InstructorProfile.
+   * Resolution moved to [InstructorContextService] on 20-11-2026 — the
+   * trainer-app tabs needed the same lookup plus a lenient variant, and two
+   * copies of an authorisation check is one too many.
+   */
+  private resolveInstructorId(userId: string): Promise<string> {
+    return this.context.require(userId);
   }
 }

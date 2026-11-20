@@ -424,22 +424,40 @@ export class BookingService {
       });
     });
 
-    // Offer each session to its best match. Failures are logged rather than
-    // thrown: the money is taken and the booking is valid, so an unassigned
-    // session belongs in the admin queue, not in a failed HTTP response.
+    // Offer each session. Two paths, and which one runs is decided by whether
+    // the customer picked a provider:
+    //
+    //   picked  → a DIRECT request that provider accepts or rejects (§4.7).
+    //             Until 20-11-2026 `create` simply wrote `instructorId` onto
+    //             the session and `offerNextCandidate` refused it as already
+    //             assigned, so a chosen provider was never asked at all — the
+    //             marketplace's accept/reject step did not exist.
+    //   not     → the ranked auto-assign cascade, unchanged.
+    //
+    // Failures are logged rather than thrown: the money is taken and the
+    // booking is valid, so an unoffered session belongs in the admin queue,
+    // not in a failed HTTP response.
     const offers = [];
     for (const session of booking.sessions) {
-      const offer = await this.assignment
-        .offerNextCandidate(session.id)
-        .catch((error: unknown) => {
-          this.logger.error(
-            `Auto-assign failed for session ${session.id}`,
-            error instanceof Error ? error.stack : String(error),
-          );
-          return null;
-        });
+      const chosen = session.instructorId;
 
-      offers.push({ sessionId: session.id, offered: Boolean(offer) });
+      const offer = await (
+        chosen
+          ? this.assignment.offerDirect(session.id, chosen)
+          : this.assignment.offerNextCandidate(session.id)
+      ).catch((error: unknown) => {
+        this.logger.error(
+          `${chosen ? 'Direct request' : 'Auto-assign'} failed for session ${session.id}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+        return null;
+      });
+
+      offers.push({
+        sessionId: session.id,
+        offered: Boolean(offer),
+        mode: chosen ? ('DIRECT' as const) : ('AUTO' as const),
+      });
     }
 
     this.logger.log(

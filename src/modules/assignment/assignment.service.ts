@@ -190,8 +190,47 @@ export class AssignmentService {
   }
 
   /**
+   * Offers a session to the teacher the **customer chose** (§3.6, §4.7).
+   *
+   * Not a ranked offer: there is nothing to rank, the customer has already
+   * picked. The session keeps its `instructorId` so the slot stays held while
+   * the request waits, and stays `CONFIRMED` — `todayForInstructor` only
+   * lists `ASSIGNED` and later, so an unanswered request never appears on
+   * anybody's timeline.
+   *
+   * `expiresAt` is deliberately null. An auto offer times out so the cascade
+   * can move on; a direct request has nowhere to cascade to, and silently
+   * expiring the provider the customer picked would substitute someone else
+   * behind both their backs. It waits for an answer, and shows in the admin
+   * queue meanwhile.
+   */
+  async offerDirect(sessionId: string, instructorId: string) {
+    const existing = await this.prisma.assignment.findFirst({
+      where: { sessionId, instructorId, response: 'PENDING' },
+      select: { id: true },
+    });
+
+    if (existing) return existing;
+
+    const offer = await this.prisma.assignment.create({
+      data: { sessionId, instructorId, mode: 'DIRECT', response: 'PENDING' },
+    });
+
+    this.logger.log(
+      `Session ${sessionId} requested directly from ${instructorId} (customer's choice)`,
+    );
+
+    return offer;
+  }
+
+  /**
    * Teacher declines. A reason is mandatory because it feeds the reliability
    * score (spec 6.3), and the session immediately cascades to the next match.
+   *
+   * **Except a `DIRECT` request** (§4.7): the customer picked this provider,
+   * so there is no next match to fall to. The teacher is detached and the
+   * session goes to `REASSIGNMENT_NEEDED`, where ops or the customer chooses
+   * again — the platform never swaps in a different provider on its own.
    */
   async decline(instructorId: string, offerId: string, reason: string) {
     const offer = await this.prisma.assignment.findFirst({
@@ -222,9 +261,47 @@ export class AssignmentService {
       },
     });
 
+    if (offer.mode === 'DIRECT') {
+      await this.releaseDirect(offer, instructorId, reason);
+      return { declined: true, cascaded: false };
+    }
+
     await this.cascade(offer.sessionId);
 
-    return { declined: true };
+    return { declined: true, cascaded: true };
+  }
+
+  /**
+   * Detaches the provider a customer picked and parks the session for ops.
+   * `cascade` is not called: see [decline].
+   */
+  private async releaseDirect(
+    offer: { sessionId: string; session: { bookingId: string; status: string } },
+    instructorId: string,
+    reason: string,
+  ) {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.bookingSession.update({
+        where: { id: offer.sessionId },
+        data: { instructorId: null, status: 'REASSIGNMENT_NEEDED' },
+      });
+
+      await tx.bookingStatusHistory.create({
+        data: {
+          bookingId: offer.session.bookingId,
+          sessionId: offer.sessionId,
+          fromStatus: offer.session.status as 'CONFIRMED',
+          toStatus: 'REASSIGNMENT_NEEDED',
+          actorType: 'INSTRUCTOR',
+          actorId: instructorId,
+          reason: `Request rejected: ${reason}`,
+        },
+      });
+    });
+
+    this.logger.warn(
+      `Session ${offer.sessionId}: direct request rejected by ${instructorId}, left for admin`,
+    );
   }
 
   /**

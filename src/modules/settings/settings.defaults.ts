@@ -130,6 +130,18 @@ export interface OnboardingPolicy {
   signedUrlTtlMinutes: number;
 }
 
+/**
+ * Numbers the trainer app's own screens need and nothing else does. Both are
+ * working assumptions — the client has set neither — and they live here
+ * rather than in the service so agreeing a value is a config change.
+ */
+export interface TrainerAppPolicy {
+  /** Page 38's Active / Inactive split: how stale a client may be. */
+  clientActiveWindowDays: number;
+  /** Page 57's bar chart: how many months of columns it draws. */
+  earningsChartMonths: number;
+}
+
 export interface HelloFitSettings {
   refundSlabs: RefundSlabs;
   reschedulePolicy: ReschedulePolicy;
@@ -140,6 +152,7 @@ export interface HelloFitSettings {
   review: ReviewPolicy;
   customer: CustomerPolicy;
   onboarding: OnboardingPolicy;
+  trainerApp: TrainerAppPolicy;
 }
 
 /**
@@ -210,6 +223,17 @@ export const DEFAULT_SETTINGS: HelloFitSettings = {
   },
   customer: {
     maxAddresses: 10,
+  },
+  trainerApp: {
+    /**
+     * Page 38 splits the trainer's client list into Active and Inactive. A
+     * client counts as active with an upcoming session, or a delivered one
+     * inside this window. Working assumption — the client has not given a
+     * number, and it is a setting so agreeing one is config, not code.
+     */
+    clientActiveWindowDays: 60,
+    /** Page 57's chart: how many months of earnings the bars cover. */
+    earningsChartMonths: 6,
   },
   onboarding: {
     // Working assumption: empanelled teachers, so PAN and bank details are
