@@ -17,7 +17,6 @@ const CARD_SELECT = {
   experienceYears: true,
   languages: true,
   specialisations: true,
-  sessionFormats: true,
   ratingAvg: true,
   ratingCount: true,
   instructorServices: {

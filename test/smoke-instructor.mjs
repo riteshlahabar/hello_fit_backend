@@ -164,9 +164,12 @@ const idProofId = first?.data?.id;
 check('stored as PENDING', first?.data?.verifyStatus, 'PENDING');
 check('the storage key never leaves the server', 'fileUrl' in (first?.data ?? {}), false);
 
-for (const type of ['ADDRESS_PROOF', 'PAN', 'BANK_DETAILS', 'YOGA_CERTIFICATION', 'PHOTO']) {
+for (const type of ['ADDRESS_PROOF', 'PAN', 'BANK_DETAILS', 'YOGA_CERTIFICATION']) {
   await upload(type);
 }
+// PHOTO is image-only since the 19-11-2026 upload fixes; the default pdf mime
+// is refused, which this loop had not caught up with.
+await upload('PHOTO', { mime: 'image/png' });
 await upload('POLICE_VERIFICATION', { expiryDate: '2028-01-31' });
 
 const docs = await call('GET', '/app/instructor/documents');

@@ -57,11 +57,6 @@ export class AdminInstructorManageService {
       ...(dto.travelRadiusKm !== undefined && {
         travelRadiusKm: dto.travelRadiusKm,
       }),
-      // Ops sets this until `instructor_app` exists (§4.5). Without it the
-      // PATCH validated the list, audited a change and saved nothing.
-      ...(dto.sessionFormats !== undefined && {
-        sessionFormats: dto.sessionFormats,
-      }),
       // Explicit null clears the override and falls back to the service's own
       // percent, so `!== undefined` rather than a truthiness check.
       ...(dto.commissionPct !== undefined && {
@@ -79,14 +74,12 @@ export class AdminInstructorManageService {
         dailySessionCap: profile.dailySessionCap,
         travelBufferMin: profile.travelBufferMin,
         travelRadiusKm: profile.travelRadiusKm,
-        sessionFormats: profile.sessionFormats,
       },
       after: {
         branchId: updated.branchId,
         dailySessionCap: updated.dailySessionCap,
         travelBufferMin: updated.travelBufferMin,
         travelRadiusKm: updated.travelRadiusKm,
-        sessionFormats: updated.sessionFormats,
       },
       ipAddress: actor.ipAddress,
       requestId: actor.requestId,

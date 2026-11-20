@@ -13,7 +13,6 @@ const CARD_SELECT = {
   experienceYears: true,
   languages: true,
   specialisations: true,
-  sessionFormats: true,
   ratingAvg: true,
   ratingCount: true,
 } satisfies Prisma.InstructorProfileSelect;
@@ -73,10 +72,6 @@ export class ProviderSearchRepository {
       instructorServices: { some: offering },
 
       ...(query.minRating ? { ratingAvg: { gte: query.minRating } } : {}),
-
-      ...(query.sessionFormat?.length
-        ? { sessionFormats: { hasSome: query.sessionFormat } }
-        : {}),
 
       ...(query.areaId || query.cityId
         ? {

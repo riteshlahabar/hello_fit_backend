@@ -62,7 +62,6 @@ const card = listed?.data?.[0];
 s.check('has a name', card?.name?.includes(stamp), true);
 s.check('has a from-price', typeof card?.fromPrice, 'number');
 s.check('has its categories', card?.categories?.length >= 1, true);
-s.check('has session formats', card?.sessionFormats?.length >= 1, true);
 s.check('and a saved timestamp', typeof card?.savedAt, 'string');
 
 const ids = await s.call('GET', '/favourites/ids', undefined, 200, 'customer');

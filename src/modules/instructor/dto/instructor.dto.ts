@@ -4,7 +4,6 @@ import { InstructorContactDto } from './instructor-contact.dto';
 import { ddMmYyyyToIsoDate } from '../../../common/dates/format';
 import {
   ArrayMaxSize,
-  ArrayNotEmpty,
   ArrayUnique,
   IsArray,
   IsEmail,
@@ -21,11 +20,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import {
-  DocumentType,
-  Gender,
-  SessionFormat,
-} from '../../../generated/prisma/enums';
+import { DocumentType, Gender } from '../../../generated/prisma/enums';
 
 /**
  * Starts an application. Deliberately minimal — the long professional profile
@@ -62,22 +57,6 @@ export class UpdateInstructorProfileDto extends InstructorContactDto {
   @IsString()
   @Length(2, 120)
   name?: string;
-
-  /**
-   * Where this provider will hold sessions — PDF §4.5 is the provider's own
-   * "Service Management", so they set this themselves; §5.5's "Session
-   * location" filter is what reads it.
-   *
-   * Non-empty when sent: an empty list would make them unfindable by the
-   * first filter most visitors touch. Ops can also set it from the admin
-   * panel today, because `instructor_app/` is still a bare scaffold.
-   */
-  @IsOptional()
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayUnique()
-  @IsEnum(SessionFormat, { each: true })
-  sessionFormats?: SessionFormat[];
 
   @IsOptional()
   @IsEnum(Gender)

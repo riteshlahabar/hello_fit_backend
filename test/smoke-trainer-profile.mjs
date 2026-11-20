@@ -42,8 +42,6 @@ const saved = await s.call(
     institute: 'ACSM',
     clientsTrainedBand: '26-50',
     serviceLocality: 'Kothrud',
-    studioName: 'Hill Road Strength',
-    studioAddress: '12 Hill Road, ground floor',
   },
   200,
   'instructor',
@@ -52,7 +50,6 @@ s.check('city stored', saved?.data?.city, 'Pune');
 s.check('pincode stored', saved?.data?.pincode, '411038');
 s.check('qualification stored', saved?.data?.qualification, 'Certified Personal Trainer');
 s.check('band stored', saved?.data?.clientsTrainedBand, '26-50');
-s.check('studio stored', saved?.data?.studioName, 'Hill Road Strength');
 s.check('locality stored', saved?.data?.serviceLocality, 'Kothrud');
 s.check('country defaulted and kept', saved?.data?.country, 'India');
 

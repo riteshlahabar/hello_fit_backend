@@ -1,7 +1,7 @@
 import type { UpdateInstructorProfileDto } from './dto/instructor.dto';
 
 /**
- * The address, professional-background and studio columns added for the
+ * The address and professional-background columns added for the
  * trainer app's onboarding wizard (19 Nov 2026).
  *
  * Kept out of `InstructorService.updateOwnProfile` so that method stays about
@@ -21,8 +21,6 @@ const CONTACT_KEYS = [
   'institute',
   'clientsTrainedBand',
   'serviceLocality',
-  'studioName',
-  'studioAddress',
 ] as const satisfies readonly (keyof UpdateInstructorProfileDto)[];
 
 type ContactKey = (typeof CONTACT_KEYS)[number];

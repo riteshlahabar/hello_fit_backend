@@ -133,13 +133,12 @@ s.section('page 18 — service areas');
 const page18 = await patch({
   serviceLocality: 'Koregaon Park',
   travelRadiusKm: 12,
-  sessionFormats: ['CUSTOMER_HOME', 'ONLINE'],
 });
 s.check('radius stored', page18?.data?.travelRadiusKm, 12);
-s.check('formats stored', page18?.data?.sessionFormats, ['CUSTOMER_HOME', 'ONLINE']);
-// Page 18 draws four modes; the enum has three. "Outdoor / Park" is still
-// open with the client (19-11-2026) — this asserts it has not been smuggled in.
-await patch({ sessionFormats: ['OUTDOOR'] }, 400);
+// Session location went on 20-11-2026 (client): home-service only, every
+// trainer travels to the customer. Page 18 keeps locality + radius only, and
+// the old field must now be refused outright.
+await patch({ sessionFormats: ['CUSTOMER_HOME'] }, 400);
 
 s.section('page 20 — payout');
 await s.call(

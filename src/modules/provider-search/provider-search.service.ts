@@ -70,7 +70,6 @@ export class ProviderSearchService {
       experienceYears: row.experienceYears,
       languages: row.languages,
       specialisations: row.specialisations,
-      sessionFormats: row.sessionFormats,
       rating: Number(row.ratingAvg),
       ratingCount: row.ratingCount,
       services: offerings.map((o) => ({

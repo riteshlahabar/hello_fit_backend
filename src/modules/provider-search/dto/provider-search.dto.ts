@@ -11,7 +11,6 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { SessionFormat } from '../../../generated/prisma/enums';
 
 /** Comma-separated query values — `?categoryId=a,b` — into an array. */
 const csv = ({ value }: { value: unknown }): unknown => {
@@ -47,13 +46,6 @@ export class SearchProvidersQueryDto {
   @IsOptional()
   @IsUUID()
   areaId?: string;
-
-  /** Sidebar "Session location" checkboxes. */
-  @IsOptional()
-  @Transform(csv)
-  @IsArray()
-  @IsEnum(SessionFormat, { each: true })
-  sessionFormat?: SessionFormat[];
 
   /**
    * Sidebar "Price per session", which reads "Up to ₹X" — so this is a

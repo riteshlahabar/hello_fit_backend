@@ -83,15 +83,4 @@ export class InstructorContactDto {
   @IsString()
   @MaxLength(160)
   serviceLocality?: string;
-
-  /** Only meaningful alongside `PROVIDER_LOCATION` (page 18). */
-  @IsOptional()
-  @IsString()
-  @MaxLength(160)
-  studioName?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(400)
-  studioAddress?: string;
 }

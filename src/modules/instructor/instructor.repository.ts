@@ -24,6 +24,9 @@ export class InstructorRepository {
   findProfileByUserId(userId: string) {
     return this.prisma.instructorProfile.findFirst({
       where: { userId, deletedAt: null },
+      // The trainer app's Edit Profile box has to show the address already on
+      // file (client, 20-11-2026); `email` lives on User, not the profile.
+      include: { user: { select: { email: true } } },
     });
   }
 

@@ -74,7 +74,13 @@ export class InstructorService {
   async getOwnProfile(userId: string) {
     const profile = await this.lookup.requireOwn(userId);
     const documents = await this.repo.listDocuments(profile.id);
-    return this.decorate(profile, documents);
+    // `email` is a User column, and page 66's box must show what is on file.
+    // Flattened rather than left as the nested relation, so the response stays
+    // one object and no other User field rides along.
+    const { user, ...rest } = profile as typeof profile & {
+      user?: { email: string | null };
+    };
+    return { ...this.decorate(rest, documents), email: user?.email ?? null };
   }
 
   async updateOwnProfile(userId: string, dto: UpdateInstructorProfileDto) {
@@ -108,9 +114,6 @@ export class InstructorService {
       ...(dto.homeBaseLng !== undefined && { homeBaseLng: dto.homeBaseLng }),
       ...(dto.travelRadiusKm !== undefined && {
         travelRadiusKm: dto.travelRadiusKm,
-      }),
-      ...(dto.sessionFormats !== undefined && {
-        sessionFormats: dto.sessionFormats,
       }),
       ...pickProfileContactFields(dto),
     });

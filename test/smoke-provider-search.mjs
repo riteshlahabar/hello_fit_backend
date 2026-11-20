@@ -72,34 +72,7 @@ await s.withAdmin(async () => {
   // Provider-set pricing went on 17-11-2026: the rate is the service's and
   // the same whoever delivers it (state/pricing-rules.md).
   s.check('the base price is the only price', admin?.data?.offerings?.[0]?.service?.basePrice, '900');
-  s.check('category named for the column', admin?.data?.offerings?.[0]?.service?.category?.name?.includes(stamp), true);
-  s.check('session formats readable', admin?.data?.sessionFormats?.length, 2);
-
-  // The picker writes through the ordinary PATCH, and the API must refuse an
-  // empty list — a provider with no session location is unfindable.
-  const emptied = await s.call(
-    'PATCH',
-    `/admin/instructors/${made.providerId}`,
-    { sessionFormats: [] },
-    400,
-  );
-  s.check('empty session formats refused', s.errorCode(emptied) !== undefined, true);
-
-  const narrowed = await s.call('PATCH', `/admin/instructors/${made.providerId}`, {
-    sessionFormats: ['ONLINE'],
-  });
-  s.check('a single format saves', narrowed?.data?.sessionFormats?.length, 1);
-});
-
-// And the website filter follows the change immediately.
-s.check('CUSTOMER_HOME no longer matches', await listed('?sessionFormat=CUSTOMER_HOME'), false);
-s.check('ONLINE still does', await listed('?sessionFormat=ONLINE'), true);
-
-await s.withAdmin(async () => {
-  await s.call('PATCH', `/admin/instructors/${made.providerId}`, {
-    sessionFormats: ['CUSTOMER_HOME', 'ONLINE'],
-  });
-});
+  s.check('category named for the column', admin?.data?.offerings?.[0]?.service?.category?.name?.includes(stamp), true);});
 
 const detail = await s.call('GET', `/providers/${made.providerId}`, undefined, 200, 'none');
 s.check('detail reachable', detail?.data?.id, made.providerId);
@@ -108,7 +81,6 @@ s.check('the service base price, not a provider price', detail?.data?.services?.
 s.check('service belongs to the provider', detail?.data?.services?.length, 1);
 s.check('supported areas listed (§5.6)', detail?.data?.areas?.length, 1);
 s.check('area carries its city', detail?.data?.areas?.[0]?.city?.id, made.cityId);
-s.check('session formats exposed', detail?.data?.sessionFormats?.length, 2);
 
 s.section('every filter in the design sidebar');
 
@@ -119,9 +91,6 @@ s.check('rating 4.5+ keeps them', await listed('?minRating=4.5'), true);
 s.check('rating 5.0 excludes them', await listed('?minRating=5'), false);
 s.check('price ceiling 900 keeps them', await listed('?maxPrice=900'), true);
 s.check('price ceiling 800 excludes them', await listed('?maxPrice=800'), false);
-s.check('CUSTOMER_HOME matches', await listed('?sessionFormat=CUSTOMER_HOME'), true);
-s.check('PROVIDER_LOCATION does not', await listed('?sessionFormat=PROVIDER_LOCATION'), false);
-s.check('ONLINE matches (multi-value)', await listed('?sessionFormat=ONLINE,PROVIDER_LOCATION'), true);
 s.check('name search matches', await listed(`?q=Smoke Provider ${stamp}`), true);
 s.check('a nonsense query does not', await listed('?q=zzzznotathing'), false);
 
@@ -145,7 +114,9 @@ s.check('and a message is supplied', typeof none?.message, 'string');
 s.section('bad input is refused');
 
 await s.call('GET', '/providers?minRating=9', undefined, 400, 'none');
-await s.call('GET', '/providers?sessionFormat=TELEPATHY', undefined, 400, 'none');
+// Session location went on 20-11-2026 (client): home-service only, so the
+// filter has one answer. `forbidNonWhitelisted` makes the old param a 400.
+await s.call('GET', '/providers?sessionFormat=CUSTOMER_HOME', undefined, 400, 'none');
 await s.call('GET', '/providers?categoryId=not-a-uuid', undefined, 400, 'none');
 await s.call('GET', '/providers/not-a-uuid', undefined, 400, 'none');
 

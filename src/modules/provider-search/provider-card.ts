@@ -30,7 +30,6 @@ export type CardRow = {
   experienceYears: number | null;
   languages: string[];
   specialisations: string[];
-  sessionFormats: string[];
   ratingAvg: unknown;
   ratingCount: number;
   instructorServices: unknown;
@@ -52,7 +51,6 @@ export function toProviderCard(row: CardRow) {
     experienceYears: row.experienceYears,
     languages: row.languages,
     specialisations: row.specialisations,
-    sessionFormats: row.sessionFormats,
     rating: Number(row.ratingAvg),
     ratingCount: row.ratingCount,
     /** The design's card shows one "from ₹X" figure. */

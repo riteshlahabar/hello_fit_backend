@@ -51,7 +51,6 @@ export async function createProvider(db, stamp) {
       name: `Smoke Provider ${stamp}`,
       experienceYears: 9,
       specialisations: ['Aerial'],
-      sessionFormats: ['CUSTOMER_HOME', 'ONLINE'],
       ratingAvg: 4.9,
       ratingCount: 12,
       status: 'ACTIVE',
