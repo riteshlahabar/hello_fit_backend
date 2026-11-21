@@ -13,6 +13,7 @@ import { BookingService } from '../booking/booking.service';
 import { WalletService } from '../wallet/wallet.service';
 import { InvoiceService } from './invoice.service';
 import { PAYMENT_GATEWAY, type PaymentGateway } from './gateway/payment-gateway';
+import { devSettlementFor } from './dev-settle';
 
 @Injectable()
 export class PaymentService {
@@ -83,6 +84,28 @@ export class PaymentService {
       publicKey: order.publicKey,
       gateway: this.gateway.name,
     };
+  }
+
+  /**
+   * Settles a booking with no gateway involved, on a machine that has no
+   * gateway credentials. A 403 whenever a real gateway is configured — see
+   * `dev-settle.ts` for why the signing cannot happen in the browser.
+   */
+  async devSettle(customerId: string, bookingId: string) {
+    const order = await this.createOrder(customerId, bookingId);
+    const settlement = devSettlementFor(this.gateway, order.orderId);
+
+    this.logger.warn(
+      `Development settlement for booking ${bookingId} — no gateway configured`,
+    );
+
+    return this.verifyPayment(customerId, {
+      bookingId,
+      gatewayOrderId: order.orderId,
+      gatewayPaymentId: settlement.gatewayPaymentId,
+      signature: settlement.signature,
+      idempotencyKey: settlement.idempotencyKey,
+    });
   }
 
   /**

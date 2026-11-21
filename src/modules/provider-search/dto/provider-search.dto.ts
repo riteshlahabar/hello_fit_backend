@@ -37,6 +37,21 @@ export class SearchProvidersQueryDto {
   @IsUUID('4', { each: true })
   categoryId?: string[];
 
+  /**
+   * One service, not a category — "which providers teach *this*" (client,
+   * 21 Nov 2026). The website's booking flow starts at a package, which is
+   * sold against a service, so by the time the customer reaches the trainer
+   * list the service is already decided and only providers an administrator
+   * approved for it may be offered.
+   *
+   * Narrower than `categoryId` and deliberately separate: a category holds
+   * several services, and a provider approved for Hatha Yoga must not appear
+   * for Power Yoga just because both sit under Yoga.
+   */
+  @IsOptional()
+  @IsUUID()
+  serviceId?: string;
+
   /** The `#city` dropdown at the top of the page. */
   @IsOptional()
   @IsUUID()

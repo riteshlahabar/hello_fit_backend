@@ -43,29 +43,14 @@ export class ProviderSearchRepository {
   /**
    * Translates the sidebar into a `where`.
    *
-   * The price and category filters both land on `instructorServices.some`,
-   * and they are deliberately in the **same** `some` rather than two: a
-   * provider who teaches Yoga at ₹2000 and Pilates at ₹400 must not match
-   * "Yoga under ₹500" by satisfying each half with a different service.
+   * The service, category and price filters all land on
+   * `instructorServices.some`, and they are deliberately in the **same**
+   * `some` rather than one each: a provider who teaches Yoga at ₹2000 and
+   * Pilates at ₹400 must not match "Yoga under ₹500" by satisfying each half
+   * with a different service.
    */
   private where(query: SearchProvidersQueryDto): Prisma.InstructorProfileWhereInput {
-    const offering: Prisma.InstructorServiceWhereInput = { ...PUBLIC_OFFERING };
-
-    if (query.categoryId?.length) {
-      offering.service = {
-        ...(offering.service as object),
-        categoryId: { in: query.categoryId },
-      };
-    }
-
-    if (query.maxPrice !== undefined) {
-      // One price per service now that providers no longer set their own
-      // (client, 17 Nov 2026), so the ceiling has a single column to hit.
-      offering.service = {
-        ...(offering.service as object),
-        basePrice: { lte: query.maxPrice },
-      };
-    }
+    const offering = this.offeringWhere(query, { withPrice: true });
 
     return {
       ...PUBLIC_PROVIDER,
@@ -116,7 +101,7 @@ export class ProviderSearchRepository {
         select: {
           ...CARD_SELECT,
           instructorServices: {
-            where: this.offeringFilter(query),
+            where: this.offeringWhere(query, { withPrice: false }),
             select: OFFERING_SELECT,
           },
         },
@@ -131,17 +116,41 @@ export class ProviderSearchRepository {
   }
 
   /**
-   * The offerings carried back with each row are filtered the same way the
-   * search was, so a card that matched "Yoga under ₹500" lists the Yoga
-   * offering rather than everything the provider teaches.
+   * The one offering filter, used twice.
+   *
+   * `where` composes it under `instructorServices.some` to decide **which
+   * providers** match; `search` reuses it to decide **which of a matching
+   * provider's offerings** travel back on the row, so a card that matched
+   * "Yoga under ₹500" lists the Yoga offering rather than everything the
+   * provider teaches.
+   *
+   * `withPrice` is the only difference between the two: the ceiling belongs
+   * in the match, but clipping the returned offerings by price would hide the
+   * rate the card then prints.
    */
-  private offeringFilter(query: SearchProvidersQueryDto): Prisma.InstructorServiceWhereInput {
+  private offeringWhere(
+    query: SearchProvidersQueryDto,
+    options: { withPrice: boolean },
+  ): Prisma.InstructorServiceWhereInput {
     const offering: Prisma.InstructorServiceWhereInput = { ...PUBLIC_OFFERING };
 
-    if (query.categoryId?.length) {
+    // The service wins over the category when both arrive: it is the narrower
+    // of the two and the booking flow's own filter.
+    if (query.serviceId) {
+      offering.serviceId = query.serviceId;
+    } else if (query.categoryId?.length) {
       offering.service = {
         ...(offering.service as object),
         categoryId: { in: query.categoryId },
+      };
+    }
+
+    if (options.withPrice && query.maxPrice !== undefined) {
+      // One price per service now that providers no longer set their own
+      // (client, 17 Nov 2026), so the ceiling has a single column to hit.
+      offering.service = {
+        ...(offering.service as object),
+        basePrice: { lte: query.maxPrice },
       };
     }
 

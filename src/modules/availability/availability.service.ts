@@ -15,6 +15,7 @@ import {
   type Slot,
   type TimeBand,
 } from './slot.calculator';
+import { openBandsFor } from './default-window';
 
 /** Statuses that still occupy a teacher's time. */
 const OCCUPYING_STATUSES = [
@@ -161,18 +162,26 @@ export class AvailabilityService {
     const tally = new Map<string, { slot: Slot; count: number }>();
 
     for (const candidate of candidates) {
+      const extraBands = candidate.availabilityOverrides
+        .filter((o) => !o.isBlocked && o.startMinute !== null)
+        .map((o) => ({
+          startMinute: o.startMinute as number,
+          endMinute: o.endMinute as number,
+        }));
+
       const slots = computeSlots(
         {
           date: params.date,
           now: new Date(),
           serviceDurationMin: service.durationMin,
-          availability: candidate.availabilityRules,
-          extraBands: candidate.availabilityOverrides
-            .filter((o) => !o.isBlocked && o.startMinute !== null)
-            .map((o) => ({
-              startMinute: o.startMinute as number,
-              endMinute: o.endMinute as number,
-            })),
+          // No rule for this weekday means open across the institute window,
+          // not closed — see `openBandsFor`.
+          availability: openBandsFor(
+            candidate.availabilityRules,
+            extraBands,
+            scheduling,
+          ),
+          extraBands,
           blockedBands: this.blockedBandsFrom(candidate.availabilityOverrides),
           // BookingSession stores from/to; BusyBand speaks start/end.
           busy: candidate.bookingSessions.map((session) => ({

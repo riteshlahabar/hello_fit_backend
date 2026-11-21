@@ -102,8 +102,21 @@ export async function findCoveredPin(db) {
         deletedAt: null,
         status: 'ACTIVE',
         kycStatus: 'VERIFIED',
-        availabilityRules: { some: { isActive: true, deletedAt: null } },
-        instructorServices: { some: { isActive: true, deletedAt: null } },
+        // **The service itself must be live, not just the offering row.**
+        // Filtering only the join row picked a teacher whose one active
+        // offering pointed at a soft-deleted service, and `/slots` then 404'd
+        // "Service not found" for all fourteen days — a failure that looked
+        // like availability and was really dirty catalog data (21 Nov 2026).
+        instructorServices: {
+          some: {
+            isActive: true,
+            deletedAt: null,
+            service: { isActive: true, deletedAt: null },
+          },
+        },
+        // No `availabilityRules` requirement: a teacher who has set none is
+        // open across the institute window (`openBandsFor`), so demanding a
+        // rule row here skipped the one assertion this fixture exists for.
       },
       area: {
         isActive: true,
@@ -126,7 +139,11 @@ export async function findCoveredPin(db) {
       instructor: {
         select: {
           instructorServices: {
-            where: { isActive: true, deletedAt: null },
+            where: {
+              isActive: true,
+              deletedAt: null,
+              service: { isActive: true, deletedAt: null },
+            },
             select: { service: { select: { id: true, name: true } } },
             take: 1,
           },

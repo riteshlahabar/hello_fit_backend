@@ -103,6 +103,21 @@ export class PaymentController {
     return { data: result, message: 'Payment confirmed' };
   }
 
+  /**
+   * Development only: settles the booking with no gateway, for a machine
+   * that has no gateway credentials. 403 as soon as a real one is configured.
+   */
+  @Post('payments/dev-settle')
+  async devSettle(
+    @Body() dto: CreateOrderDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    const customerId = await this.customerId(userId);
+    const result = await this.payments.devSettle(customerId, dto.bookingId);
+
+    return { data: result, message: 'Payment confirmed (development gateway)' };
+  }
+
   /** Pay the whole booking from wallet balance, no gateway involved. */
   @Post('payments/wallet')
   async payFromWallet(
