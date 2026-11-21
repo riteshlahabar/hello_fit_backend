@@ -116,7 +116,12 @@ s.section('what replaced them');
 // has something stable to correct. So "Good Morning" is what the HTML always
 // carries, whatever time this suite runs. Capitalised on the client's
 // instruction, 16 Nov 2026.
-s.check('identity renders a placeholder, not a name', html.includes('Good Morning,'), true);
+// **Not `'Good Morning,'`.** React writes a `<!-- -->` marker between
+// adjacent text nodes, so the served HTML is `Good Morning<!-- -->, <!-- -->—`
+// and the comma never sits against the greeting — the same trap documented in
+// `PackageCards`. Stale since the greeting change on 16 Nov 2026.
+s.check('identity renders the greeting', html.includes('Good Morning'), true);
+s.check('and a placeholder, not a name', /Good Morning(<!-- -->)?, /.test(html), true);
 s.check('the unknown marker is used', html.includes('—'), true);
 s.check('bookings panel mounted', html.includes('id="allBookingList"'), true);
 s.check('its filter still exists', html.includes('id="bookingFilter"'), true);

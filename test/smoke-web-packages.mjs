@@ -58,11 +58,26 @@ s.check('its free sessions', mine?.freeSessionCount, 2);
 // shows terms and never a rupee figure of its own.
 s.check('no price without a service', mine?.price, null);
 
-s.section('the page is served and reads that list');
+s.section('no service picked: the prompt, not the cards');
 
-const html = await fetch(`${SITE}/packages`).then((r) => r.text());
+/**
+ * **These six moved behind `?service=` on 18 Nov 2026** and this suite went on
+ * asking for them at `/packages`, so it failed for three days reporting the
+ * card as broken when the card was correctly absent. The client's instruction
+ * was that a package shows no rupees until a service supplies the rate, and
+ * a card with no money on it reads as a missing price — so the page shows a
+ * prompt instead and the cards appear only once a service is chosen.
+ */
+const bare = await fetch(`${SITE}/packages`).then((r) => r.text());
 
-s.check('served', html.length > 1000, true);
+s.check('served', bare.length > 1000, true);
+s.check('the prompt stands in for the cards', bare.includes('Choose a service above'), true);
+s.check('and no card is rendered', bare.includes(`Web Pack ${stamp}`), false);
+
+s.section('a service picked: the cards and their terms');
+
+const html = await fetch(`${SITE}/packages?service=${target.slug}`).then((r) => r.text());
+
 s.check('the package name renders', html.includes(`Web Pack ${stamp}`), true);
 s.check('its sessions render', html.includes('12 paid sessions'), true);
 s.check('its free sessions render', html.includes('2 free sessions on top'), true);
@@ -70,6 +85,11 @@ s.check('its validity renders', html.includes('Valid for 45 days'), true);
 s.check('its percent renders', html.includes('17% off the session rate'), true);
 
 s.check('the admin symbol renders on the card', html.includes('🧪'), true);
+
+// Client, 21 Nov 2026: the card hands the service **and** the package on to
+// the trainer search. Dropped, the booking flow re-asks for a service and
+// then prices the booking at `Service.basePrice`.
+s.check('the card carries the choice forward', html.includes('Choose this package'), true);
 
 s.section('the service picker prices the cards');
 
@@ -79,11 +99,10 @@ const rate = Number(target?.basePrice ?? 0);
 
 s.check("the service carries a rate to price against", rate > 0, true);
 s.check('the picker is on the page', html.includes('service-picker'), true);
-s.check('no rupee total before a service is picked', html.includes('for 12 sessions'), false);
+s.check('no rupee total before a service is picked', bare.includes('for 12 sessions'), false);
 
-const priced = await fetch(`${SITE}/packages?service=${target.slug}`).then((r) =>
-  r.text(),
-);
+// `html` already is the priced page — one fetch, asserted from both angles.
+const priced = html;
 // 12 sessions at the service rate, less the package's 17%.
 const total = Math.round(rate * 12 * 0.83).toLocaleString('en-IN');
 

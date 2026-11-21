@@ -50,6 +50,17 @@ s.section('the profile renders that provider');
 
 const page = await get(`/trainer-profile?id=${provider.id}`);
 
+/**
+ * **`length > 1000` is not "served".** Next's own error page is ~19 KB, so a
+ * 500 sailed past that check on 21-11-2026 while the page was completely
+ * broken — a server component had passed a *function* prop to a client
+ * component (`Functions cannot be passed directly to Client Components`),
+ * which `tsc`, `eslint` and `next build` all miss because this route is
+ * dynamic and never rendered at build time. The status and the error-page
+ * marker are what actually prove it rendered.
+ */
+s.check('page status is 200', await status(`/trainer-profile?id=${provider.id}`), 200);
+s.check('not Next\'s error page', page.includes('__next_error__'), false);
 s.check('page served', page.length > 1000, true);
 s.check('keeps its scope', page.includes('data-hf-page="trainer-profile"'), true);
 s.check('real name on the page', page.includes(provider.name), true);
@@ -120,6 +131,51 @@ s.check('Book a Session kept', page.includes('Book a Session'), true);
 s.check('Check Availability kept', page.includes('Check Availability'), true);
 s.check('Select kept', page.includes('>Select<'), true);
 s.check('Choose this service kept', page.includes('Choose this service'), true);
+
+s.section('a provider WITH a photo — the path no fixture ever took');
+
+/**
+ * **Why this section exists.** Every fixture provider is created without a
+ * photo, so nothing in any suite ever rendered the image branch. On the review
+ * VPS the one provider who *had* uploaded a photo made the profile 500 and the
+ * search card blank, and no test anywhere could have caught it.
+ *
+ * Two things are asserted, and the first is the one that matters: the URL the
+ * page serves must be **same-origin**. The API stores an absolute link built
+ * from `PUBLIC_BASE_URL` at upload time, which on the VPS was
+ * `http://localhost:4000/...` — a URL that resolves to the *visitor's own
+ * machine*. A smoke test that merely fetched the stored URL would pass, since
+ * on the server loopback is real; only the rendered `src` tells the truth.
+ */
+const photoPath = `/api/v1/files/public/instructors/${provider.id}/photo/smoke-${Date.now()}.jpg`;
+
+await s.cleanup((db) =>
+  db.instructorProfile.update({
+    where: { id: provider.id },
+    // Deliberately the broken shape the VPS stores, so the assertion proves
+    // the rewrite rather than a URL that was already fine.
+    data: { photoUrl: `http://localhost:4000${photoPath}` },
+  }),
+);
+
+const withPhoto = await get(`/trainer-profile?id=${provider.id}`);
+
+s.check('still 200 with a photo', await status(`/trainer-profile?id=${provider.id}`), 200);
+s.check('not Next\'s error page', withPhoto.includes('__next_error__'), false);
+s.check('the photo is served same-origin', withPhoto.includes(`src="${photoPath}"`), true);
+s.check('no loopback host reaches the browser', /src="http:\/\/(localhost|127\.0\.0\.1)/.test(withPhoto), false);
+s.check(
+  'and not through the image optimizer, which cannot reach the API',
+  withPhoto.includes('/_next/image?url=%2Fapi%2Fv1%2Ffiles'),
+  false,
+);
+
+const cards = await get('/find-a-trainer');
+s.check('the search card serves it the same way', cards.includes(`src="${photoPath}"`), true);
+
+await s.cleanup((db) =>
+  db.instructorProfile.update({ where: { id: provider.id }, data: { photoUrl: null } }),
+);
 
 s.section('a bad or missing id is honest, not a crash');
 

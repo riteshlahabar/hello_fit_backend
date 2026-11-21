@@ -55,7 +55,16 @@ s.section('filters are administered, not invented');
 s.check('demo city "Mumbai" not hard-coded', html.includes('>Mumbai<'), false);
 s.check('demo category "Weight Loss" not hard-coded', html.includes('>Weight Loss<'), false);
 s.check('a live category is offered', html.includes('Yoga'), true);
-s.check('session location filter present', html.includes("At trainer&#x27;s location") || html.includes("At trainer's location"), true);
+// **Inverted on 21-11-2026.** Session location was deleted on 20 Nov —
+// HelloFit is home-service only, `SessionFormat` and `session_formats` are
+// dropped, and §5.5's "session location" filter is a knowing override
+// (`state/scope-documents.md`). This suite kept demanding the filter for a
+// day, so it reported a correctly-removed control as a missing one.
+s.check(
+  'session location filter is gone, not merely unwired',
+  html.includes("At trainer&#x27;s location") || html.includes("At trainer's location"),
+  false,
+);
 s.check('price slider kept', html.includes('price-range'), true);
 s.check('rating filter kept', html.includes('rating-filter'), true);
 
