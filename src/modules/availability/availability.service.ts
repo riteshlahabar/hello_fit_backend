@@ -82,7 +82,15 @@ export class AvailabilityService {
       });
     }
 
-    if (!address.areaId) {
+    // Coverage is a policy switch, not a hard rule (client, 23-11-2026).
+    // `scheduling.requireServiceArea` is **off** by default: nothing writes
+    // `instructor_service_areas` yet — PDF §4.2/US-P03 puts "enter service
+    // areas" in the unbuilt provider app — so enforcing it emptied every slot
+    // grid on every surface, which the customer reads as "nobody is free".
+    // With it off, an address outside every area and a provider with no
+    // coverage are both offered; turning it on restores the rule below with
+    // no code change.
+    if (scheduling.requireServiceArea && !address.areaId) {
       // The address sits outside every serviceable area — this is what drives
       // the app's "coming soon, notify me" state (spec 3.1).
       return [];
@@ -107,8 +115,9 @@ export class AvailabilityService {
 
     if (holiday) return [];
 
-    // Teachers who serve this area and offer this service, with everything
-    // the slot computation needs in one round trip.
+    // Teachers who offer this service — and, when coverage is enforced, who
+    // serve this area — with everything the slot computation needs in one
+    // round trip.
     const candidates = await this.prisma.instructorProfile.findMany({
       where: {
         deletedAt: null,
@@ -118,7 +127,9 @@ export class AvailabilityService {
         instructorServices: {
           some: { serviceId: service.id, isActive: true, deletedAt: null },
         },
-        instructorServiceAreas: { some: { areaId: address.areaId } },
+        ...(scheduling.requireServiceArea && address.areaId
+          ? { instructorServiceAreas: { some: { areaId: address.areaId } } }
+          : {}),
       },
       select: {
         id: true,

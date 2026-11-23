@@ -61,6 +61,17 @@ export interface SchedulingPolicy {
   autoCompleteGraceMin: number;
   /** How long the teacher waits before a customer no-show may be marked. */
   noShowWaitMin: number;
+  /**
+   * Whether a provider must cover the session address's area to be offered.
+   *
+   * **Off until the provider app can set coverage** (client, 23-11-2026).
+   * `instructor_service_areas` is read by `findSlots` and written by nothing —
+   * PDF §4.2/US-P03 puts "enter service areas" in the provider app, which is
+   * unbuilt — so with this on, every slot grid on every surface is empty by
+   * construction and the customer reads it as "nobody is free". Turn it on
+   * (an `app_settings` row, no code change) the day coverage is real data.
+   */
+  requireServiceArea: boolean;
 }
 
 export interface PaymentPolicy {
@@ -196,6 +207,7 @@ export const DEFAULT_SETTINGS: HelloFitSettings = {
     instituteCloseMinute: 22 * 60,
     autoCompleteGraceMin: 30,
     noShowWaitMin: 15,
+    requireServiceArea: false,
   },
   payment: {
     slotHoldMinutes: 15,

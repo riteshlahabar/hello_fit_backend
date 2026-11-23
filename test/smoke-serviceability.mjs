@@ -7,6 +7,12 @@
  * client, no client could supply one, and `findSlots` answers an area-less
  * address with `[]` (`availability.service.ts:84`).
  *
+ * **Coverage stopped being a hard rule on 23-11-2026.**
+ * `scheduling.requireServiceArea` is off by default, so an uncovered address
+ * is offered like any other; the PIN -> area resolution asserted here still
+ * matters (it is what pricing and assignment read), but it no longer decides
+ * whether a grid comes back.
+ *
  * Fixtures live in `serviceability-fixture.mjs`, per the 200-line rule.
  */
 import { smoke, day } from './smoke-harness.mjs';
@@ -103,7 +109,7 @@ const movedBack = await s.call('PATCH', `/app/customer/addresses/${addressIds[0]
 }, 200, 'customer');
 s.check('and resolved again on move back', movedBack?.data?.areaId, geo.areaA);
 
-s.section('an area with no teacher resolves and still shows nothing');
+s.section('an area with no teacher resolves and is no longer gated');
 
 const services = await s.call('GET', '/services', undefined, 200, 'none');
 const anyServiceId = services?.data?.[0]?.id;
@@ -114,7 +120,12 @@ const unservedSlots = await s.call(
   `/app/customer/slots?serviceId=${anyServiceId}&date=${day(2)}&addressId=${addressIds[2]}`,
   undefined, 200, 'customer',
 );
-s.check('an unserved address returns the empty grid', unservedSlots?.data?.length, 0);
+// Was `length === 0` until 23-11-2026. `scheduling.requireServiceArea` is now
+// off by default — nothing writes `instructor_service_areas`, so enforcing
+// coverage emptied every grid — and an uncovered address is answered like any
+// other. The assertion is that the call still succeeds with a grid; turning
+// the policy back on is what makes it empty again.
+s.check('an unserved address still gets a grid', Array.isArray(unservedSlots?.data), true);
 
 s.section('the point of all of it: a real covered PIN -> a usable grid');
 
