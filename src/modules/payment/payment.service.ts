@@ -14,6 +14,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { InvoiceService } from './invoice.service';
 import { PAYMENT_GATEWAY, type PaymentGateway } from './gateway/payment-gateway';
 import { devSettlementFor } from './dev-settle';
+import { BookingNotifications } from '../booking/booking.notifications';
 
 @Injectable()
 export class PaymentService {
@@ -24,6 +25,7 @@ export class PaymentService {
     private readonly booking: BookingService,
     private readonly wallet: WalletService,
     private readonly invoices: InvoiceService,
+    private readonly notifier: BookingNotifications,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
   ) {}
 
@@ -177,6 +179,14 @@ export class PaymentService {
         },
       });
 
+      // The slot stays held until the cron releases it, so this says the
+      // payment failed — not that the booking is gone (§3.9, "payment-related
+      // messages"). The hold expiry sends its own message when it fires.
+      await this.notifier.paymentFailed(
+        booking.id,
+        'The payment could not be verified.',
+      );
+
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_FAILED,
         message: 'Payment could not be verified',
@@ -241,6 +251,7 @@ export class PaymentService {
       booking.id,
       customerId,
       'SYSTEM',
+      invoice.invoiceNo,
     );
 
     return { paymentId: payment.id, status: 'CAPTURED', invoice, ...confirmed };
@@ -291,6 +302,7 @@ export class PaymentService {
       booking.id,
       booking.customerId,
       'SYSTEM',
+      invoice.invoiceNo,
     );
 
     this.logger.log(

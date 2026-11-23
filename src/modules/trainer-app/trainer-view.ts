@@ -107,3 +107,25 @@ export function statusLabelOf(status: string): string {
     ? status.replace(/_/g, ' ')
     : bucketOf(status).toUpperCase();
 }
+
+/**
+ * Page 32's **Completed** button (client, 23-11-2026). The trainer closes
+ * the booking himself with the 4-digit code the customer reads off their own
+ * app; the act and the reasoning are in `session-actions.service.ts`.
+ *
+ * `NO_SHOW_TEACHER` is in the list because the auto no-show cron flags any
+ * session that was never checked in, and under this flow a check-in never
+ * happens — a valid customer code disproves the flag.
+ */
+export const COMPLETABLE_STATUSES = [
+  'CONFIRMED',
+  'ASSIGNED',
+  'EN_ROUTE',
+  'IN_PROGRESS',
+  'NO_SHOW_TEACHER',
+] as const;
+
+/** Whether page 32 offers the Completed button for a session in this status. */
+export function isCompletableByTrainer(status: string): boolean {
+  return (COMPLETABLE_STATUSES as readonly string[]).includes(status);
+}

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BookingNotifications } from './booking.notifications';
 
 /**
  * Releases slots held by bookings that were never paid for (spec 3.1 step 10:
@@ -15,7 +16,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class BookingExpiryService {
   private readonly logger = new Logger(BookingExpiryService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifier: BookingNotifications,
+  ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
   async expireUnpaidBookings(): Promise<void> {
@@ -64,6 +68,15 @@ export class BookingExpiryService {
           })),
         });
       });
+    }
+
+    // Sent after the slot is actually back, so the customer is told why the
+    // booking they left half-paid has gone (PDF 3.9, payment messages).
+    for (const booking of expired) {
+      await this.notifier.paymentFailed(
+        booking.id,
+        'Payment was not completed within the hold window.',
+      );
     }
 
     this.logger.log(

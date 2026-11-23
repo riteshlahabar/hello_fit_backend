@@ -69,6 +69,7 @@
     "smoke:trainer-documents": "node -r dotenv/config test/smoke-trainer-documents.mjs",
     "smoke:trainer-registration": "node -r dotenv/config test/smoke-trainer-registration.mjs",
     "smoke:trainer-tabs": "node -r dotenv/config test/smoke-trainer-tabs.mjs",
+    "smoke:trainer-session-actions": "node -r dotenv/config test/smoke-trainer-session-actions.mjs",
     "smoke:admin-trainer-services": "node -r dotenv/config test/smoke-admin-trainer-services.mjs",
     "smoke:web-booking-flow": "node -r dotenv/config test/smoke-web-booking-flow.mjs"
   },

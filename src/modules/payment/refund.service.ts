@@ -12,19 +12,10 @@ import { sessionStartsAt } from '../../common/dates/calendar';
 import { WalletService } from '../wallet/wallet.service';
 import {
   computeRefund,
+  isCancellable,
   type CancelledBy,
 } from '../booking/refund.calculator';
 import { PAYMENT_GATEWAY, type PaymentGateway } from './gateway/payment-gateway';
-
-/** Statuses a session can still be cancelled from. */
-const CANCELLABLE = [
-  'PENDING_PAYMENT',
-  'CONFIRMED',
-  'ASSIGNED',
-  'REASSIGNMENT_NEEDED',
-  'EN_ROUTE',
-  'RESCHEDULE_REQUESTED',
-] as const;
 
 @Injectable()
 export class RefundService {
@@ -75,7 +66,7 @@ export class RefundService {
       });
     }
 
-    if (!CANCELLABLE.includes(session.status as (typeof CANCELLABLE)[number])) {
+    if (!isCancellable(session.status)) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_FAILED,
         message: `A ${session.status} session cannot be cancelled`,
@@ -260,9 +251,7 @@ export class RefundService {
     return {
       sessionId,
       sessionValue: Number(session.sessionValue),
-      cancellable: CANCELLABLE.includes(
-        session.status as (typeof CANCELLABLE)[number],
-      ),
+      cancellable: isCancellable(session.status),
       slab: outcome.slab,
       refundPercent: outcome.percent,
       refundAmount:

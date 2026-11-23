@@ -12,6 +12,7 @@ import { ErrorCode } from '../../common/errors/error-codes';
 import { haversineKm } from '../../common/geo/distance';
 import { calendarWeekday } from '../../common/dates/calendar';
 import { AvailabilityService } from '../availability/availability.service';
+import { AssignmentNotifications } from './assignment.notifications';
 import {
   rankCandidates,
   type Candidate,
@@ -29,6 +30,7 @@ export class AssignmentService {
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
     private readonly availability: AvailabilityService,
+    private readonly notifier: AssignmentNotifications,
   ) {}
 
   /**
@@ -62,6 +64,7 @@ export class AssignmentService {
       this.logger.warn(
         `Session ${sessionId}: ${alreadyOffered.length} offers exhausted, leaving for admin`,
       );
+      await this.notifier.cascadeExhausted(sessionId, alreadyOffered.length);
       return null;
     }
 
@@ -103,6 +106,8 @@ export class AssignmentService {
     this.logger.log(
       `Session ${sessionId} offered to ${best.instructorId} (score ${best.score}), expires ${expiresAt.toISOString()}`,
     );
+
+    await this.notifier.offered(sessionId, best.instructorId, expiresAt);
 
     return offer;
   }
@@ -152,7 +157,7 @@ export class AssignmentService {
       });
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const accepted = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.assignment.update({
         where: { id: offerId },
         data: { response: 'ACCEPTED', respondedAt: new Date() },
@@ -187,6 +192,12 @@ export class AssignmentService {
 
       return updated;
     });
+
+    // §3.9: the customer is told a provider accepted. The session now carries
+    // the teacher, so the emitter reads the name back off it.
+    await this.notifier.confirmed(offer.sessionId);
+
+    return accepted;
   }
 
   /**
@@ -219,6 +230,10 @@ export class AssignmentService {
     this.logger.log(
       `Session ${sessionId} requested directly from ${instructorId} (customer's choice)`,
     );
+
+    // The same card as a ranked offer, minus the countdown — a direct request
+    // never expires, so `offered` says so in words instead of a timer.
+    await this.notifier.offered(sessionId, instructorId, null);
 
     return offer;
   }
@@ -302,6 +317,18 @@ export class AssignmentService {
     this.logger.warn(
       `Session ${offer.sessionId}: direct request rejected by ${instructorId}, left for admin`,
     );
+
+    // Read after the detach, so the name comes from the provider row rather
+    // than the session — which no longer has one.
+    const instructor = await this.prisma.instructorProfile.findUnique({
+      where: { id: instructorId },
+      select: { name: true },
+    });
+
+    await this.notifier.requestRejected(
+      offer.sessionId,
+      instructor?.name ?? 'The provider',
+    );
   }
 
   /**
@@ -346,8 +373,8 @@ export class AssignmentService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const assignment = await tx.assignment.create({
+    const assignment = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.assignment.create({
         data: {
           sessionId: params.sessionId,
           instructorId: params.instructorId,
@@ -362,7 +389,7 @@ export class AssignmentService {
       await tx.assignment.updateMany({
         where: {
           sessionId: params.sessionId,
-          id: { not: assignment.id },
+          id: { not: created.id },
           response: 'PENDING',
         },
         data: { response: 'CANCELLED', respondedAt: new Date() },
@@ -386,8 +413,14 @@ export class AssignmentService {
         },
       });
 
-      return assignment;
+      return created;
     });
+
+    // Ops placing a teacher is the same news to the customer as a provider
+    // accepting — spec 3.3 says notify both sides, and the event is one.
+    await this.notifier.confirmed(params.sessionId);
+
+    return assignment;
   }
 
   /** Offers waiting on this teacher, newest first (Requests tab). */

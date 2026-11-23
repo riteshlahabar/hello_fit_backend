@@ -188,6 +188,9 @@ export async function removeWorld(db, made) {
   await db.earning.deleteMany({ where: { instructorId: made.trainerId } });
   await db.assignment.deleteMany({ where: { instructorId: made.trainerId } });
   await db.bookingStatusHistory.deleteMany({ where: { bookingId: made.bookingId } });
+  // Raised by the page-32 Cancel button; Restrict on the booking, so it has
+  // to go before the booking does.
+  await db.refund.deleteMany({ where: { bookingId: made.bookingId } });
   await db.bookingSession.deleteMany({ where: { bookingId: made.bookingId } });
   await db.booking.deleteMany({ where: { id: made.bookingId } });
   await db.address.deleteMany({ where: { id: made.addressId } });

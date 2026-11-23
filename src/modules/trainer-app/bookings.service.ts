@@ -2,8 +2,13 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ErrorCode } from '../../common/errors/error-codes';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { Prisma } from '../../generated/prisma/client';
+import { isCancellable } from '../booking/refund.calculator';
 import { toBookingRow, summariseBuckets } from './bookings.view';
-import { BOOKING_BUCKETS, type BookingBucket } from './trainer-view';
+import {
+  BOOKING_BUCKETS,
+  isCompletableByTrainer,
+  type BookingBucket,
+} from './trainer-view';
 
 /** Every status a trainer screen can show — i.e. not an unpaid session. */
 const VISIBLE = Object.values(BOOKING_BUCKETS).flat();
@@ -122,6 +127,12 @@ export class TrainerBookingsService {
       ...toBookingRow(row),
       sessionCount: row.booking.sessionCount,
       notes: row.notesByInstructor,
+      /**
+       * Page 32's two buttons. Both are a question about the status alone,
+       * answered here so the screen never has to hold a copy of the rule.
+       */
+      canComplete: isCompletableByTrainer(row.status),
+      canCancel: isCancellable(row.status),
       goal: row.booking.customer.goal,
       healthNotes: row.booking.customer.healthNotes,
       /** Gender, language, "same teacher" — whatever the customer asked for. */

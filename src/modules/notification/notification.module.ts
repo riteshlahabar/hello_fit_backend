@@ -5,6 +5,7 @@ import { NotificationController } from './notification.controller';
 import { NotificationDispatchService } from './notification-dispatch.service';
 import { NotificationRepository } from './notification.repository';
 import { NotificationService } from './notification.service';
+import { NotificationContextService } from './notification-context.service';
 import { FcmPushSender } from './channels/fcm-push.sender';
 import {
   LogEmailSender,
@@ -92,6 +93,7 @@ const emailProvider = {
   controllers: [NotificationController, AdminNotificationController],
   providers: [
     NotificationService,
+    NotificationContextService,
     NotificationRepository,
     NotificationDispatchService,
     FcmPushSender,
@@ -103,6 +105,6 @@ const emailProvider = {
     emailProvider,
   ],
   // Exported so every other module can inject it and call `emit`.
-  exports: [NotificationService],
+  exports: [NotificationService, NotificationContextService],
 })
 export class NotificationModule {}

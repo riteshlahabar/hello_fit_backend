@@ -81,7 +81,7 @@ export const NOTIFICATION_EVENTS = {
   'offer.created': {
     description: 'A session offer the teacher must accept before it cascades',
     priority: 'high',
-    variables: ['areaName', 'sessionDate', 'fromTime', 'toTime', 'expiresInMin'],
+    variables: ['areaName', 'sessionDate', 'fromTime', 'toTime', 'respondBy'],
     instructor: PUSH,
   },
   'assignment.confirmed': {
@@ -89,6 +89,22 @@ export const NOTIFICATION_EVENTS = {
     variables: ['instructorName', 'sessionDate', 'fromTime'],
     customer: PUSH_SMS,
     instructor: PUSH,
+    admin: IN_APP,
+  },
+  /**
+   * PDF §3.9 asks in so many words for a status update "when a provider
+   * accepts or rejects a request". Accept is `assignment.confirmed`; this is
+   * the other half, and it had no key because nothing emitted either.
+   *
+   * Only a `DIRECT` request raises it. An auto-assign decline is invisible to
+   * the customer by design — the cascade simply asks the next teacher, and
+   * telling someone their booking was turned down by a provider they never
+   * chose would be alarming and useless.
+   */
+  'assignment.request_rejected': {
+    description: 'The provider the customer picked rejected the request',
+    variables: ['bookingCode', 'instructorName', 'sessionDate', 'fromTime'],
+    customer: PUSH_SMS,
     admin: IN_APP,
   },
   'assignment.cascade_exhausted': {

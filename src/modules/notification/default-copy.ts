@@ -64,7 +64,7 @@ export const DEFAULT_COPY: Record<
   'offer.created': {
     INSTRUCTOR: {
       title: 'New session offer',
-      body: '{{areaName}}, {{sessionDate}} {{fromTime}}–{{toTime}}. Respond within {{expiresInMin}} minutes.',
+      body: '{{areaName}}, {{sessionDate}} {{fromTime}}–{{toTime}}. {{respondBy}}',
       deepLink: '/instructor/offers',
     },
   },
@@ -83,6 +83,18 @@ export const DEFAULT_COPY: Record<
       title: 'Teacher assigned',
       body: '{{instructorName}} assigned for {{sessionDate}} {{fromTime}}.',
       deepLink: '/admin/bookings',
+    },
+  },
+  'assignment.request_rejected': {
+    CUSTOMER: {
+      title: 'Request declined',
+      body: '{{instructorName}} cannot take {{bookingCode}} on {{sessionDate}} at {{fromTime}}. Pick another provider — nothing has been charged twice.',
+      deepLink: '/bookings/{{bookingCode}}',
+    },
+    ADMIN: {
+      title: 'Direct request rejected',
+      body: '{{instructorName}} rejected {{bookingCode}} for {{sessionDate}} {{fromTime}}.',
+      deepLink: '/admin/assignment-queue',
     },
   },
   'assignment.cascade_exhausted': {

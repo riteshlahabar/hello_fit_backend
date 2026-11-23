@@ -133,3 +133,24 @@ export function evaluateReschedule(
     ? { allowed: true, chargeable: false, reason: 'FREE' }
     : { allowed: true, chargeable: true, reason: 'FREE_QUOTA_EXHAUSTED' };
 }
+
+/**
+ * Statuses a session can still be cancelled from. Lives here with the rest
+ * of the cancellation policy so the one list serves both the act
+ * (`RefundService`) and the screens that decide whether to offer the button.
+ */
+export const CANCELLABLE_STATUSES = [
+  'PENDING_PAYMENT',
+  'CONFIRMED',
+  'ASSIGNED',
+  'REASSIGNMENT_NEEDED',
+  'EN_ROUTE',
+  'RESCHEDULE_REQUESTED',
+] as const;
+
+export type CancellableStatus = (typeof CANCELLABLE_STATUSES)[number];
+
+/** Whether the Cancel button applies to a session in this status. */
+export function isCancellable(status: string): boolean {
+  return (CANCELLABLE_STATUSES as readonly string[]).includes(status);
+}

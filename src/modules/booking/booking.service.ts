@@ -28,6 +28,7 @@ import {
   type QuoteBreakup,
 } from './pricing.calculator';
 import { PricingResolver, type PricingBasis } from './pricing.resolver';
+import { BookingNotifications } from './booking.notifications';
 import type { CreateBookingDto, QuoteBookingDto } from './dto/booking.dto';
 import type { ListBookingsQueryDto } from './dto/admin-booking.dto';
 import type { SessionStatus } from '../../generated/prisma/enums';
@@ -53,6 +54,7 @@ export class BookingService {
     private readonly assignment: AssignmentService,
     private readonly coupons: CouponService,
     private readonly pricing: PricingResolver,
+    private readonly notifier: BookingNotifications,
   ) {}
 
   /**
@@ -355,6 +357,12 @@ export class BookingService {
       `Booking ${booking.code} created: ${sessionCount} session(s), payable ${breakup.payable}`,
     );
 
+    // After the commit, never inside it: the slot is held and the customer is
+    // waiting on the response, so the reminder to pay must not be able to
+    // roll the booking back (US-C14: "delivery failures do not incorrectly
+    // change the booking status").
+    await this.notifier.created(booking.id, payment.slotHoldMinutes);
+
     return {
       id: booking.id,
       code: booking.code,
@@ -379,8 +387,17 @@ export class BookingService {
    * queue. The payments module will call this from the verified Razorpay
    * webhook; until then it is reachable from the admin panel, which is also
    * how a cash or manual payment is recorded.
+   *
+   * `invoiceNo` is passed in rather than looked up: the payment paths hold the
+   * invoice they just raised, and the admin "mark paid" route raises none, so
+   * the confirmation message quotes one only when one exists.
    */
-  async confirmPayment(bookingId: string, actorId: string, actorType: 'ADMIN' | 'SYSTEM') {
+  async confirmPayment(
+    bookingId: string,
+    actorId: string,
+    actorType: 'ADMIN' | 'SYSTEM',
+    invoiceNo?: string,
+  ) {
     const booking = await this.prisma.booking.findFirst({
       where: { id: bookingId, deletedAt: null },
       include: { sessions: { where: { status: 'PENDING_PAYMENT' } } },
@@ -463,6 +480,8 @@ export class BookingService {
     this.logger.log(
       `Booking ${booking.code} confirmed: ${offers.filter((o) => o.offered).length}/${offers.length} session(s) offered`,
     );
+
+    await this.notifier.confirmed(bookingId, invoiceNo ?? null);
 
     return { bookingId, paymentStatus: 'PAID' as const, offers };
   }
