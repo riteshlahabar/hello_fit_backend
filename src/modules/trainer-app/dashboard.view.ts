@@ -29,6 +29,7 @@ export function toRequestPreview(row: {
   id: string;
   mode: string;
   session: {
+    id: string;
     service: { name: string };
     booking: { customer: { name: string } };
   };
@@ -37,6 +38,9 @@ export function toRequestPreview(row: {
 
   return {
     id: row.id,
+    // Page 24's "Review" opens page 32, which is keyed by the session, not by
+    // the assignment the trainer is answering.
+    sessionId: row.session.id,
     initials: initialsOf(name),
     title: 'New client request',
     subtitle: `From ${shortNameOf(name)} · ${row.session.service.name}`,

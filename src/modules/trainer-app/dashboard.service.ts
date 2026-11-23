@@ -69,6 +69,7 @@ export class TrainerDashboardService {
           mode: true,
           session: {
             select: {
+              id: true,
               service: { select: { name: true } },
               booking: { select: { customer: { select: { name: true } } } },
             },

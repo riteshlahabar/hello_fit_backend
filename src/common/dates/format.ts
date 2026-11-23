@@ -26,6 +26,21 @@ export function formatDate(value: Date): string {
   ].join('-');
 }
 
+/**
+ * `Mon` … `Sun` — the weekday a calendar day falls on, read in UTC for the
+ * same reason `formatDate` is: the day is stored at UTC midnight, so the
+ * server's zone would name the day before.
+ *
+ * English short names, hard-coded rather than `toLocaleDateString`: the panel
+ * prints what the API sends, and a locale on the server would quietly rename
+ * every day the moment the VPS zone or ICU data changed.
+ */
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+export function formatWeekday(value: Date): string {
+  return WEEKDAYS[value.getUTCDay()];
+}
+
 /** `19-11-2026 14:30:05`. The same day, with the clock. */
 export function formatDateTime(value: Date): string {
   const clock = [

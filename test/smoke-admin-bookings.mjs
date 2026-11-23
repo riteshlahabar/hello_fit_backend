@@ -14,6 +14,13 @@ import { smoke } from './smoke-harness.mjs';
 
 const s = smoke();
 
+/** `24-11-2026` → `Tue`. The test's own clock, to check the server's. */
+const weekdayOf = (ddmmyyyy) => {
+  const [dd, mm, yyyy] = String(ddmmyyyy).split('-').map(Number);
+  const day = new Date(Date.UTC(yyyy, mm - 1, dd)).getUTCDay();
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day];
+};
+
 await s.withAdmin(async () => {
   // The list, with its joins — customer -> user, service, sessions ->
   // instructor. This is the query a bad `where` or `select` would throw on.
@@ -48,6 +55,34 @@ await s.withAdmin(async () => {
     s.check('detail has statusHistory', Array.isArray(detail?.data?.statusHistory), true);
     s.check('detail has payments', Array.isArray(detail?.data?.payments), true);
     s.check('detail joins the customer', typeof detail?.data?.customer?.name, 'string');
+
+    // The Day column beside the date (client, 23-11-2026). Checked against
+    // the date the same row carries, so a wrong timezone shows up here: the
+    // day is read in UTC because a session date is stored at UTC midnight.
+    const sessions = detail?.data?.sessions ?? [];
+    s.check(
+      'every session names its weekday',
+      sessions.every((row) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/.test(row.sessionDay ?? '')),
+      true,
+    );
+    s.check(
+      'and the weekday matches the date',
+      sessions.every((row) => row.sessionDay === weekdayOf(row.sessionDate)),
+      true,
+    );
+
+    // One entry per change, not one per session: `confirmPayment` and
+    // `cancelForAdmin` write a row for every session in the booking.
+    const history = detail?.data?.statusHistory ?? [];
+    const keys = history.map((row) =>
+      [row.fromStatus, row.toStatus, row.actorType, row.reason, row.createdAt].join('|'),
+    );
+    s.check('history is collapsed to one row per change', keys.length, new Set(keys).size);
+    s.check(
+      'and each row counts the sessions it moved',
+      history.every((row) => Number.isInteger(row.sessions) && row.sessions >= 1),
+      true,
+    );
   } else {
     console.log('note: no bookings in this database — detail not exercised');
   }

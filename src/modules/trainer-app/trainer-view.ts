@@ -54,10 +54,24 @@ export function slotOf(row: {
  * `SessionStatus` → the pill the client's HTML draws. Four buckets, because
  * pages 30 and 37 filter on exactly those: Confirmed, Pending, Completed,
  * Cancelled.
+ *
+ * **`CONFIRMED` is confirmed here, not pending** (client, 23-11-2026). It sat
+ * in `pending` until then, reasoning that the trainer had not accepted yet
+ * (§4.7) — but the status is reached by the payment settling, so the money is
+ * taken and the customer, the website and the admin table all call that
+ * booking confirmed. A pill reading PENDING on the trainer's own screen
+ * contradicted all three.
+ *
+ * What the trainer still owes an answer on is the *offer*, not the session:
+ * that is page 31, which reads `assignment.response = 'PENDING'` and is
+ * untouched by this bucket map. A session whose offer is unanswered therefore
+ * shows as CONFIRMED in Bookings while sitting in the Requests inbox — the
+ * detail screen's accept/reject strip keys off `request.response`, not the
+ * bucket, so it still appears.
  */
 export const BOOKING_BUCKETS = {
-  pending: ['CONFIRMED', 'RESCHEDULE_REQUESTED'],
-  confirmed: ['ASSIGNED', 'EN_ROUTE', 'IN_PROGRESS'],
+  pending: ['RESCHEDULE_REQUESTED'],
+  confirmed: ['CONFIRMED', 'ASSIGNED', 'EN_ROUTE', 'IN_PROGRESS'],
   completed: ['COMPLETED'],
   cancelled: [
     'CANCELLED_BY_CUSTOMER',
@@ -71,11 +85,7 @@ export const BOOKING_BUCKETS = {
 
 export type BookingBucket = keyof typeof BOOKING_BUCKETS;
 
-/**
- * Which bucket a status falls in. `CONFIRMED` means paid but **not yet
- * accepted by the trainer** (§4.7), which is why it reads as "pending" on the
- * trainer's own screens while the customer sees a confirmed booking.
- */
+/** Which bucket a status falls in. Anything unrecognised reads as cancelled. */
 export function bucketOf(status: string): BookingBucket {
   for (const [bucket, members] of Object.entries(BOOKING_BUCKETS)) {
     if ((members as readonly string[]).includes(status)) {
@@ -85,11 +95,15 @@ export function bucketOf(status: string): BookingBucket {
   return 'cancelled';
 }
 
+/**
+ * The two in-flight statuses that print their own words — everything else
+ * prints its bucket, so `ASSIGNED` and `CONFIRMED` both read `CONFIRMED`.
+ */
+const OWN_WORDS = new Set(['EN_ROUTE', 'IN_PROGRESS']);
+
 /** The word on the pill: `ASSIGNED` → `CONFIRMED`, `EN_ROUTE` → `EN ROUTE`. */
 export function statusLabelOf(status: string): string {
-  const bucket = bucketOf(status);
-  if (bucket === 'confirmed' && status !== 'ASSIGNED') {
-    return status.replace(/_/g, ' ');
-  }
-  return bucket.toUpperCase();
+  return OWN_WORDS.has(status)
+    ? status.replace(/_/g, ' ')
+    : bucketOf(status).toUpperCase();
 }

@@ -48,6 +48,7 @@ s.check('schedule has the ASSIGNED session', home?.data?.schedule?.length, 1);
 s.check('schedule time is split', home?.data?.schedule?.[0]?.meridiem, 'AM');
 s.check('client name is masked', home?.data?.schedule?.[0]?.clientLine, 'Client: Aditi K. · 60 min');
 s.check('request preview present', home?.data?.requests?.[0]?.initials, 'AK');
+s.check('preview carries the session id Review opens', typeof home?.data?.requests?.[0]?.sessionId, 'string');
 s.check('stage reported', home?.data?.trainer?.stage, 'APPROVED');
 
 s.section('page 30 — bookings list and its summary');
@@ -55,8 +56,11 @@ const all = await as('GET', '/app/instructor/bookings');
 s.check('five rows', all?.data?.length, 5);
 s.check('summary total', all?.meta?.summary?.total, 5);
 s.check('two completed', all?.meta?.summary?.completed, 2);
-s.check('two upcoming', all?.meta?.summary?.upcoming, 2);
-s.check('one pending the answer', all?.meta?.summary?.pending, 1);
+// Three, not two: the paid session whose DIRECT offer is still unanswered is
+// confirmed, not pending (client, 23-11-2026). Nothing is pending here —
+// `pending` now holds RESCHEDULE_REQUESTED alone.
+s.check('three upcoming', all?.meta?.summary?.upcoming, 3);
+s.check('nothing pending', all?.meta?.summary?.pending, 0);
 s.check('newest first', all?.data?.[0]?.slot?.date, all?.data?.[0]?.slot?.date);
 s.check('row date is dd-mm-yyyy', /^\d{2}-\d{2}-\d{4}$/.test(all?.data?.[0]?.slot?.date), true);
 s.check('row carries the area, not the street', all?.data?.[0]?.area?.includes('Baner'), true);
@@ -67,8 +71,15 @@ const completed = await as('GET', '/app/instructor/bookings?status=completed');
 s.check('completed chip', completed?.data?.length, 2);
 s.check('summary unchanged under a filter', completed?.meta?.summary?.total, 5);
 const pending = await as('GET', '/app/instructor/bookings?status=pending');
-s.check('pending chip', pending?.data?.length, 1);
-s.check('pending bucket label', pending?.data?.[0]?.statusLabel, 'PENDING');
+s.check('pending chip is empty', pending?.data?.length, 0);
+// The point of the 23-11-2026 change: the unanswered §4.7 session sits under
+// the Confirmed chip and its pill says so, while page 31 still asks for the
+// answer (asserted below).
+const confirmed = await as('GET', '/app/instructor/bookings?status=confirmed');
+s.check('confirmed chip', confirmed?.data?.length, 3);
+const unanswered = confirmed?.data?.find((r) => r.sessionId === made.sessionIds[4]);
+s.check('the unanswered offer reads CONFIRMED', unanswered?.statusLabel, 'CONFIRMED');
+s.check('and its pill is tinted confirmed', unanswered?.bucket, 'confirmed');
 await as('GET', '/app/instructor/bookings?status=nonsense', undefined, 400);
 
 s.section('the search box');
