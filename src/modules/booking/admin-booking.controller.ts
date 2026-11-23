@@ -18,6 +18,7 @@ import {
   AdminCancelBookingDto,
   ListBookingsQueryDto,
 } from './dto/admin-booking.dto';
+import { formatBookingDates } from './admin-booking.view';
 
 /**
  * Booking management (PDF 6.6) plus payment confirmation.
@@ -41,14 +42,16 @@ export class AdminBookingController {
   @RequirePermissions('bookings:view')
   async list(@Query() query: ListBookingsQueryDto) {
     const { rows, meta } = await this.booking.listForAdmin(query);
-    return { data: rows, meta };
+    return { data: formatBookingDates(rows), meta };
   }
 
   /** Sessions, payments and the full status history. */
   @Get('bookings/:id')
   @RequirePermissions('bookings:view')
   async detail(@Param('id', ParseUUIDPipe) id: string) {
-    return { data: await this.booking.getForAdmin(id) };
+    // Formatted here and not in the service: `cancelForAdmin` reads the same
+    // call and needs real `Date` objects (hard rule 4, `admin-booking.view.ts`).
+    return { data: formatBookingDates(await this.booking.getForAdmin(id)) };
   }
 
   /**
