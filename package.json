@@ -55,6 +55,7 @@
     "smoke:provider-search": "node -r dotenv/config test/smoke-provider-search.mjs",
     "smoke:web-home-search": "node -r dotenv/config test/smoke-web-home-search.mjs",
     "smoke:web-logout": "node -r dotenv/config test/smoke-web-logout.mjs",
+    "smoke:web-session-expiry": "node -r dotenv/config test/smoke-web-session-expiry.mjs",
     "smoke:web-dashboard": "node -r dotenv/config test/smoke-web-dashboard.mjs",
     "smoke:web-find-a-trainer": "node -r dotenv/config test/smoke-web-find-a-trainer.mjs",
     "smoke:web-shell": "node -r dotenv/config test/smoke-web-shell.mjs",
