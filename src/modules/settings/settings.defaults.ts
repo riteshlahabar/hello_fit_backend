@@ -153,6 +153,29 @@ export interface TrainerAppPolicy {
   earningsChartMonths: number;
 }
 
+/**
+ * §3.11 / §5.11 support contact details, for the customer app's Support tab
+ * and the website's contact page (client, 27-11-2026: contact-only — there is
+ * no inquiry module, and the client has not asked for one).
+ *
+ * Every value is a setting rather than a constant for the usual reason: a
+ * helpline that changes must not need a release. The defaults below are
+ * **placeholders and are not the client's real numbers** — they are the
+ * office details on the scope document's own footer, so nothing here invents
+ * a contact that does not exist. Override the `support` row in
+ * `app_settings` with the real ones.
+ */
+export interface SupportPolicy {
+  phone: string;
+  /** Digits only, no `+`, as `wa.me/` wants them. Blank hides the row. */
+  whatsapp: string;
+  email: string;
+  /** Shown under the rows, e.g. "Mon–Sat, 8:00 AM – 8:00 PM". */
+  hours: string;
+  /** Postal address, as one line. Blank hides the row. */
+  address: string;
+}
+
 export interface HelloFitSettings {
   refundSlabs: RefundSlabs;
   reschedulePolicy: ReschedulePolicy;
@@ -164,6 +187,7 @@ export interface HelloFitSettings {
   customer: CustomerPolicy;
   onboarding: OnboardingPolicy;
   trainerApp: TrainerAppPolicy;
+  support: SupportPolicy;
 }
 
 /**
@@ -282,6 +306,16 @@ export const DEFAULT_SETTINGS: HelloFitSettings = {
     ],
     expiryReminderDays: 30,
     signedUrlTtlMinutes: 15,
+  },
+  support: {
+    // Placeholders off the scope document's own footer, NOT the client's
+    // real support line. Override the `support` row in `app_settings`.
+    phone: '+91 20 0000 0000',
+    whatsapp: '',
+    email: 'support@hellofit.in',
+    hours: 'Mon-Sat, 8:00 AM - 8:00 PM',
+    address:
+      'Turnkey Infotech, Office No. 7 Indraprastha Chambers, Karve Road, Kothrud, Pune 411029',
   },
 };
 

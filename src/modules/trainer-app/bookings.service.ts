@@ -3,7 +3,11 @@ import { ErrorCode } from '../../common/errors/error-codes';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { Prisma } from '../../generated/prisma/client';
 import { isCancellable } from '../booking/refund.calculator';
-import { toBookingRow, summariseBuckets } from './bookings.view';
+import {
+  toBookingGroups,
+  toBookingRow,
+  summariseBuckets,
+} from './bookings.view';
 import {
   BOOKING_BUCKETS,
   isCompletableByTrainer,
@@ -71,9 +75,18 @@ export class TrainerBookingsService {
       }),
     ]);
 
+    const groups = toBookingGroups(rows);
+
+    // `count` is the number of cards, and `sessionCount` the number of rows
+    // behind them (client, 27-11-2026: one card per booking). The summary
+    // tiles keep counting sessions — they are a tally of work, not of cards.
     return {
-      data: rows.map(toBookingRow),
-      meta: { count: rows.length, summary: summariseBuckets(counts) },
+      data: groups,
+      meta: {
+        count: groups.length,
+        sessionCount: rows.length,
+        summary: summariseBuckets(counts),
+      },
     };
   }
 

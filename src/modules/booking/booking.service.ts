@@ -544,6 +544,15 @@ export class BookingService {
             fromMinute: true,
             toMinute: true,
             status: true,
+            // The customer's own code for the session, which the teacher asks
+            // for at the door (client, 27-11-2026: "show this code on
+            // customer app"). The detail route has always returned it — it
+            // uses `include` — and this list is where "My Bookings" needs it,
+            // so the next session's code is readable without opening the
+            // booking. It is the customer's own secret and only ever reaches
+            // the customer who owns the booking: `listForCustomer` is scoped
+            // by `customerId`, which the controller resolves from the token.
+            checkInOtp: true,
             instructor: { select: { id: true, name: true } },
           },
         },

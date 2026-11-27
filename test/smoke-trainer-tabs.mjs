@@ -51,9 +51,15 @@ s.check('request preview present', home?.data?.requests?.[0]?.initials, 'AK');
 s.check('preview carries the session id Review opens', typeof home?.data?.requests?.[0]?.sessionId, 'string');
 s.check('stage reported', home?.data?.trainer?.stage, 'APPROVED');
 
-s.section('page 30 — bookings list and its summary');
+s.section('page 30 — one card per booking, sessions under it');
 const all = await as('GET', '/app/instructor/bookings');
-s.check('five rows', all?.data?.length, 5);
+// Client, 27-11-2026: the fixture's five sessions are one package for one
+// client, so they are **one** card now, not five near-identical ones.
+s.check('one card', all?.data?.length, 1);
+s.check('carrying five sessions', all?.data?.[0]?.sessionCount, 5);
+s.check('and the rows are still counted in meta', all?.meta?.sessionCount, 5);
+s.check('every session keeps its own id', new Set((all?.data?.[0]?.sessions ?? []).map((x) => x.sessionId)).size, 5);
+s.check('a session carries its own status', typeof all?.data?.[0]?.sessions?.[0]?.bucket, 'string');
 s.check('summary total', all?.meta?.summary?.total, 5);
 s.check('two completed', all?.meta?.summary?.completed, 2);
 // Three, not two: the paid session whose DIRECT offer is still unanswered is
@@ -61,14 +67,19 @@ s.check('two completed', all?.meta?.summary?.completed, 2);
 // `pending` now holds RESCHEDULE_REQUESTED alone.
 s.check('three upcoming', all?.meta?.summary?.upcoming, 3);
 s.check('nothing pending', all?.meta?.summary?.pending, 0);
-s.check('newest first', all?.data?.[0]?.slot?.date, all?.data?.[0]?.slot?.date);
-s.check('row date is dd-mm-yyyy', /^\d{2}-\d{2}-\d{4}$/.test(all?.data?.[0]?.slot?.date), true);
-s.check('row carries the area, not the street', all?.data?.[0]?.area?.includes('Baner'), true);
-s.check('amount is a number', all?.data?.[0]?.amount, 800);
+s.check('session date is dd-mm-yyyy', /^\d{2}-\d{2}-\d{4}$/.test(all?.data?.[0]?.sessions?.[0]?.slot?.date), true);
+s.check('card carries the area, not the street', all?.data?.[0]?.area?.includes('Baner'), true);
+// The card is worth the sum of the sessions this trainer is on, which is not
+// the booking's own payable: a cascade can split one booking across two.
+s.check('card amount sums its sessions', all?.data?.[0]?.amount, 4000);
+s.check('a session keeps its own amount', all?.data?.[0]?.sessions?.[0]?.amount, 800);
 
 s.section('the filter chips, and that they never move the summary');
 const completed = await as('GET', '/app/instructor/bookings?status=completed');
-s.check('completed chip', completed?.data?.length, 2);
+// One card still, now holding only the two delivered sessions: the chip
+// filters the sessions and the fold follows it.
+s.check('completed chip is one card', completed?.data?.length, 1);
+s.check('with two sessions in it', completed?.data?.[0]?.sessionCount, 2);
 s.check('summary unchanged under a filter', completed?.meta?.summary?.total, 5);
 const pending = await as('GET', '/app/instructor/bookings?status=pending');
 s.check('pending chip is empty', pending?.data?.length, 0);
@@ -76,15 +87,18 @@ s.check('pending chip is empty', pending?.data?.length, 0);
 // the Confirmed chip and its pill says so, while page 31 still asks for the
 // answer (asserted below).
 const confirmed = await as('GET', '/app/instructor/bookings?status=confirmed');
-s.check('confirmed chip', confirmed?.data?.length, 3);
-const unanswered = confirmed?.data?.find((r) => r.sessionId === made.sessionIds[4]);
+s.check('confirmed chip is one card', confirmed?.data?.length, 1);
+s.check('with three sessions in it', confirmed?.data?.[0]?.sessionCount, 3);
+const unanswered = (confirmed?.data?.[0]?.sessions ?? []).find(
+  (x) => x.sessionId === made.sessionIds[4],
+);
 s.check('the unanswered offer reads CONFIRMED', unanswered?.statusLabel, 'CONFIRMED');
 s.check('and its pill is tinted confirmed', unanswered?.bucket, 'confirmed');
 await as('GET', '/app/instructor/bookings?status=nonsense', undefined, 400);
 
 s.section('the search box');
 const found = await as('GET', '/app/instructor/bookings?q=Aditi');
-s.check('search by client name', found?.data?.length, 5);
+s.check('search by client name', found?.data?.length, 1);
 const missed = await as('GET', '/app/instructor/bookings?q=zzzznope');
 s.check('search that matches nothing', missed?.data?.length, 0);
 s.check('but the summary still stands', missed?.meta?.summary?.total, 5);
