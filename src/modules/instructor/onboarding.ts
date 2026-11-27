@@ -1,3 +1,4 @@
+import { documentLabels } from './document-labels';
 import type { OnboardingPolicy } from '../settings/settings.defaults';
 import type {
   DocumentType,
@@ -162,7 +163,7 @@ export function canSubmitForReview(
 
   const missing = missingDocuments(policy, documents);
   if (missing.length > 0) {
-    reasons.push(`Upload these documents: ${missing.join(', ')}`);
+    reasons.push(`Upload these documents: ${documentLabels(missing)}`);
   }
 
   if (!applicant.codeOfConductAt) {
@@ -187,13 +188,13 @@ export function canApprove(
 
   const unverified = unverifiedDocuments(policy, documents);
   if (unverified.length > 0) {
-    reasons.push(`Awaiting verification: ${unverified.join(', ')}`);
+    reasons.push(`Awaiting verification: ${documentLabels(unverified)}`);
   }
 
   const expired = expiredDocuments(documents);
   if (expired.length > 0) {
     reasons.push(
-      `Expired documents: ${expired.map((d) => String(d.docType)).join(', ')}`,
+      `Expired documents: ${documentLabels(expired.map((d) => String(d.docType)))}`,
     );
   }
 

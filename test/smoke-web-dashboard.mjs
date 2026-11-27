@@ -1,25 +1,17 @@
 /**
- * The customer dashboard's sidebar navigation — PDF 3.x, demo page
- * `hellofit-customer-dashboard.html`.
+ * The customer dashboard — demo page `hellofit-customer-dashboard.html`.
  *
- * The demo drove its six panels with an inline `gotoPage()` and a
- * `#menuToggle` listener. Neither was converted, so every sidebar button did
- * nothing and the mobile menu would not open. `DashboardNav.tsx` restores
- * exactly that behaviour; this proves it shipped.
+ * **Rewritten 27-11-2026, and the inversion is the point.** Until today this
+ * suite asserted that six `.page-panel` sections and six `data-page` buttons
+ * were PRESENT: the demo drove the whole account area from inside this one
+ * page. The client had that removed — every account row is a link to a real
+ * route, and the dashboard keeps Overview alone — so the same facts are now
+ * asserted ABSENT. Not one panel can come back without this failing.
  *
- * WHAT THIS CAN AND CANNOT PROVE. The component renders `null`, so a click
- * handler leaves no trace in server HTML — a page with the navigation and one
- * without look identical. So this suite checks the two halves that *are*
- * observable over HTTP:
- *
- *   1. the preconditions the handler needs — six panels, six buttons with
- *      `data-page`, exactly one starting `active`, and the `#sidebar` and
- *      `#menuToggle` it reaches for;
- *   2. that the handler code is really in the deployed bundle, by fetching the
- *      page's own JS chunks and looking for `NAV_MARKER`.
- *
- * A click actually switching panels is a browser assertion, not an HTTP one,
- * and is deliberately out of scope here rather than faked.
+ * What is still only provable in a browser (a click, a hover) stays out of
+ * scope rather than being faked. The one thing that leaves no trace in server
+ * HTML is `DashboardNav`, which renders `null`; it is proved by fetching the
+ * page's own JS chunks and looking for `NAV_MARKER`.
  *
  *   SMOKE_SITE_URL=http://localhost:3001 npm run smoke:web-dashboard
  */
@@ -27,9 +19,6 @@ import { smoke } from './smoke-harness.mjs';
 
 const SITE = process.env.SMOKE_SITE_URL ?? 'http://localhost:3001';
 const NAV_MARKER = 'hf-dashboard-nav-ready';
-
-/** The six panels the demo shipped, and the button that reveals each. */
-const PAGES = ['overview', 'bookings', 'saved', 'goals', 'profile', 'settings'];
 
 const s = smoke();
 
@@ -39,38 +28,74 @@ const html = await fetch(`${SITE}/dashboard`).then((r) => r.text());
 s.check('dashboard served', html.length > 1000, true);
 s.check('it is the converted page', html.includes('data-hf-page="dashboard"'), true);
 
-s.section('every panel the navigation targets exists');
+s.section('the in-page panels are gone');
 
-for (const page of PAGES) {
-  s.check(`panel page-${page} present`, html.includes(`id="page-${page}"`), true);
-  s.check(`button for ${page} present`, html.includes(`data-page="${page}"`), true);
+// `.page-panel` and `data-page` were the whole switching mechanism. One of
+// either means a panel came back.
+s.check('no .page-panel sections', html.includes('page-panel'), false);
+s.check('no data-page buttons', html.includes('data-page='), false);
+
+for (const panel of ['bookings', 'saved', 'goals', 'profile', 'settings']) {
+  s.check(`panel page-${panel} gone`, html.includes(`id="page-${panel}"`), false);
 }
 
-s.section('exactly one panel starts open');
+// The two components the panels carried, absorbed by /my-bookings and /profile.
+s.check('bookings panel gone', html.includes('id="allBookingList"'), false);
+s.check('its filter gone', html.includes('id="bookingFilter"'), false);
+s.check('profile form gone', html.includes('Loading your details'), false);
 
-// `.page-panel{display:none}` with `.active{display:block}` is the design's
-// own CSS, so two actives would show two panels stacked and none would show a
-// blank dashboard. Overview is the demo's default.
-const actives = (html.match(/class="page-panel active"/g) ?? []).length;
-s.check('one active panel', actives, 1);
-s.check('and it is overview', /class="page-panel active" id="page-overview"/.test(html), true);
+s.section('the dead Settings panel is gone');
 
-const activeButtons = (html.match(/class="nav-btn active"/g) ?? []).length;
-s.check('one active nav button', activeButtons, 1);
+// Three switches that saved nothing and duplicated /notifications.
+for (const dead of [
+  'Booking reminders',
+  'Offers and wellness tips',
+  'id="saveSettings"',
+  'Control your HelloFit experience',
+]) {
+  s.check(`"${dead}" gone`, html.includes(dead), false);
+}
 
-s.section('what the toggle reaches for');
+s.section('the shared account sidebar is on the page');
+
+s.check('shared sidebar rendered', html.includes('hf-account-sidebar'), true);
+s.check('shared shell rendered', html.includes('hf-account-shell'), true);
+s.check('the page no longer draws its own', html.includes('class="sidebar"'), false);
+
+// Every row is a real link now. A missing href is a row that goes nowhere.
+for (const href of [
+  '/dashboard',
+  '/my-bookings',
+  '/saved-trainers',
+  '/goals',
+  '/profile',
+  '/notifications',
+  '/billing',
+  '/refunds',
+]) {
+  s.check(`row links to ${href}`, html.includes(`href="${href}"`), true);
+}
+
+s.check('Overview renamed', html.includes('>Overview<'), false);
+s.check('to Dashboard', html.includes('Dashboard'), true);
+s.check('Settings row gone', html.includes('⚙</span> Settings'), false);
+
+s.section('Explore trainers is a real link');
+
+// It was `<button id="findTrainerSide">` with no handler — it did nothing.
+s.check('dead button gone', html.includes('findTrainerSide'), false);
+s.check('links to find-a-trainer', html.includes('href="/find-a-trainer"'), true);
+s.check('copy kept', html.includes('Ready for your next session?'), true);
+
+s.section('what the mobile toggle reaches for');
 s.check('#sidebar present', html.includes('id="sidebar"'), true);
-
-// The sidebar toggle moved into the shared Header on 13 Nov as
-// `SidebarToggle`. It is driven by a route list rather than a DOM check, so
-// this page is in SIDEBAR_ROUTES and the button IS server-rendered.
 s.check('sidebar toggle present', html.includes('id="menuToggle"'), true);
 
 s.section('the handler is in the deployed bundle');
 
-// Next.js inlines nothing useful in the HTML for a null-rendering client
-// component, so follow the page's own script tags. A build that dropped
-// DashboardNav would serve identical HTML and fail only here.
+// Next.js inlines nothing useful for a null-rendering client component, so
+// follow the page's own script tags. A build that dropped DashboardNav would
+// serve identical HTML and fail only here.
 const chunks = [...html.matchAll(/src="(\/_next\/static\/[^"]+\.js)"/g)].map((m) => m[1]);
 s.check('page ships JS chunks', chunks.length > 0, true);
 
@@ -84,11 +109,8 @@ for (const chunk of chunks) {
 }
 s.check(`NAV_MARKER "${NAV_MARKER}" in a chunk`, foundMarker, true);
 
-s.section('every fabricated value is gone from the source');
+s.section('every fabricated value is still gone');
 
-// These were asserted PRESENT in the first version of this suite, as a record
-// of audit item 10. They are now asserted ABSENT, which is the whole point of
-// the change: not one of them can come back without this failing.
 for (const fake of [
   'Aditya',                    // someone else's name, shown to every customer
   'aditya@example.com',
@@ -97,8 +119,6 @@ for (const fake of [
   '>12<',                      // total sessions
   '>75%<',                     // a progress figure against a goal that does not exist
   'Complete 12 sessions',
-  '12 session goal',
-  '3 to go',
   'Sample bookings',
   'sample data',
   'prototype',
@@ -109,36 +129,13 @@ for (const fake of [
 s.section('what replaced them');
 
 // The live values arrive in the browser, so the server HTML carries the
-// loading and unknown states rather than the numbers themselves. Asserting
-// those proves the live components are mounted and the literals are not.
-// The greeting follows the reader's clock now, but a *server* render cannot
-// know their hour — `lib/greeting.ts` pins it to band 0 on purpose so hydration
-// has something stable to correct. So "Good Morning" is what the HTML always
-// carries, whatever time this suite runs. Capitalised on the client's
-// instruction, 16 Nov 2026.
-// **Not `'Good Morning,'`.** React writes a `<!-- -->` marker between
-// adjacent text nodes, so the served HTML is `Good Morning<!-- -->, <!-- -->—`
-// and the comma never sits against the greeting — the same trap documented in
-// `PackageCards`. Stale since the greeting change on 16 Nov 2026.
+// loading and unknown states rather than the numbers. `lib/greeting.ts` pins a
+// server render to band 0 so hydration has something stable to correct, which
+// is why "Good Morning" is what the HTML always carries whatever the hour.
+// **Not `'Good Morning,'`** — React writes a `<!-- -->` marker between
+// adjacent text nodes, so the comma never sits against the greeting.
 s.check('identity renders the greeting', html.includes('Good Morning'), true);
 s.check('and a placeholder, not a name', /Good Morning(<!-- -->)?, /.test(html), true);
 s.check('the unknown marker is used', html.includes('—'), true);
-s.check('bookings panel mounted', html.includes('id="allBookingList"'), true);
-s.check('its filter still exists', html.includes('id="bookingFilter"'), true);
-
-// The filter's third option described a status the API cannot return.
-s.check('"Awaiting confirmation" dropped', html.includes('Awaiting confirmation'), false);
-s.check('replaced by Completed', html.includes('>Completed<'), true);
-
-s.section('the profile panel is the live form');
-
-// The form itself is NOT in this HTML, and that is the correct answer rather
-// than a gap: the panel is token-gated and fetches in the browser, so the
-// server renders its loading state — the same thing `smoke:web-pages` asserts
-// for every other wired page. Which fields end up editable is a browser
-// assertion; what is provable here is that the demo's filled-in form is gone
-// and a loading component stands in its place.
-s.check('live profile component mounted', html.includes('Loading your details'), true);
-s.check('the demo form is not server-rendered', html.includes('defaultValue="Aditya'), false);
 
 s.done();

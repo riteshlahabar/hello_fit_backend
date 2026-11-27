@@ -8,8 +8,16 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CustomerService } from './customer.service';
+import { PHOTO_MAX_BYTES } from './customer-photo';
+import {
+  CustomerPhotoService,
+  type UploadedPhoto,
+} from './customer-photo.service';
 import {
   AllowAudience,
   CurrentUser,
@@ -33,7 +41,10 @@ import {
 @AllowAudience('app')
 @Roles('CUSTOMER')
 export class CustomerController {
-  constructor(private readonly customers: CustomerService) {}
+  constructor(
+    private readonly customers: CustomerService,
+    private readonly photos: CustomerPhotoService,
+  ) {}
 
   // ----------------------------------------------------------------- profile
 
@@ -50,6 +61,44 @@ export class CustomerController {
     return {
       data: await this.customers.updateProfile(userId, dto),
       message: 'Profile updated',
+    };
+  }
+
+  /**
+   * Multipart upload of the customer's own profile photo: one part, `file`.
+   *
+   * Memory storage, like the teacher's document route — the bytes go straight
+   * to the storage port, so writing them to a temp file first would only add a
+   * path to clean up. `fileSize` here is the interceptor's hard stop; the
+   * friendlier message comes from `assertUploadablePhoto`.
+   *
+   * A POST and not a PATCH: there is one photo, and sending a new one replaces
+   * it outright rather than merging anything.
+   */
+  @Post('profile/photo')
+  @HttpCode(200)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: PHOTO_MAX_BYTES, files: 1 },
+    }),
+  )
+  async uploadPhoto(
+    @CurrentUser('id') userId: string,
+    @UploadedFile() file: UploadedPhoto,
+  ) {
+    return {
+      data: await this.photos.replacePhoto(userId, file),
+      message: 'Profile photo updated',
+    };
+  }
+
+  /** Removes the photo. The customer's initials are shown again. */
+  @Delete('profile/photo')
+  @HttpCode(200)
+  async deletePhoto(@CurrentUser('id') userId: string) {
+    return {
+      data: await this.photos.removePhoto(userId),
+      message: 'Profile photo removed',
     };
   }
 

@@ -146,7 +146,13 @@ export function smoke() {
     tokens.customer = verified?.data?.accessToken ?? '';
     check('customer token', tokens.customer.length > 20, true);
 
-    return { mobile, user: verified?.data?.user };
+    // The token is returned as well as held: a multipart upload cannot go
+    // through `call`, so `multipart-upload.mjs` needs the bearer in hand.
+    return {
+      mobile,
+      user: verified?.data?.user,
+      token: tokens.customer,
+    };
   }
 
   /** Asserts a route is unreachable unauthenticated. The 401 every suite owes. */
