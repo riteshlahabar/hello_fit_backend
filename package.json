@@ -28,6 +28,7 @@
     "smoke:customer": "node test/smoke-customer.mjs",
     "smoke:customer-photo": "node test/smoke-customer-photo.mjs",
     "smoke:instructor": "node -r dotenv/config test/smoke-instructor.mjs",
+    "smoke:register-role": "node -r dotenv/config test/smoke-register-role.mjs",
     "smoke:trainer-profile": "node -r dotenv/config test/smoke-trainer-profile.mjs",
     "smoke:payout": "node -r dotenv/config test/smoke-payout.mjs",
     "smoke:notification": "node -r dotenv/config test/smoke-notification.mjs",

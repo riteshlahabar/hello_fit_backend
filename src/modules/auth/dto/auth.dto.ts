@@ -10,7 +10,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { DevicePlatform } from '../../../generated/prisma/enums';
+import { DevicePlatform, UserRole } from '../../../generated/prisma/enums';
 import { OTP_LENGTH } from '../otp.service';
 
 /** Indian mobile numbers, stored and compared in E.164-ish digits only. */
@@ -60,6 +60,19 @@ export class VerifyOtpDto extends SendOtpDto {
   @ValidateNested()
   @Type(() => DeviceInfoDto)
   device?: DeviceInfoDto;
+
+  /**
+   * Which app is signing in, and so which profile a first login creates
+   * (client, 27-11-2026). The trainer app sends INSTRUCTOR, so a trainer
+   * registration lands in `instructor_profiles` and shows in the admin
+   * panel's trainer list, not its customer list.
+   *
+   * Optional and CUSTOMER by default: the customer app and the website both
+   * omit it, and so does every older build still in someone's hands.
+   */
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
 }
 
 export class RefreshTokenDto {

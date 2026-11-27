@@ -20,7 +20,10 @@ import type {
   VerifyOtpDto,
 } from './dto/auth.dto';
 import { UserStatus, type UserRole } from '../../generated/prisma/enums';
-import { generateReferralCode } from '../customer/referral';
+import {
+  AccountProvisioningService,
+  APP_USER_INCLUDE,
+} from './account-provisioning';
 
 /** What the app needs to decide which shell to load (spec 6.1). */
 export interface AppSession extends TokenPair {
@@ -45,6 +48,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
     private readonly tokens: TokenService,
+    private readonly accounts: AccountProvisioningService,
   ) {}
 
   /**
@@ -82,8 +86,9 @@ export class AuthService {
 
   /**
    * Verifies the OTP and signs the person in, creating the account on first
-   * login. A new account gets the CUSTOMER role; becoming an instructor is a
-   * separate application (spec 3.6).
+   * login. Which profile that account gets follows `dto.role` — the trainer
+   * app sends INSTRUCTOR, everything else defaults to CUSTOMER
+   * (`account-provisioning.ts`).
    */
   async verifyLoginOtp(
     dto: VerifyOtpDto,
@@ -113,10 +118,7 @@ export class AuthService {
 
     const existing = await this.prisma.user.findUnique({
       where: { mobile: dto.mobile },
-      include: {
-        customerProfile: { select: { id: true } },
-        instructorProfile: { select: { id: true, onboardingStage: true } },
-      },
+      include: APP_USER_INCLUDE,
     });
 
     if (existing && existing.status !== UserStatus.ACTIVE) {
@@ -128,24 +130,14 @@ export class AuthService {
       });
     }
 
-    const user =
-      existing ??
-      (await this.prisma.user.create({
-        data: {
-          mobile: dto.mobile,
-          roles: ['CUSTOMER'],
-          customerProfile: {
-            create: {
-              name: '',
-              referralCode: await this.generateReferralCode(),
-            },
-          },
-        },
-        include: {
-          customerProfile: { select: { id: true } },
-          instructorProfile: { select: { id: true, onboardingStage: true } },
-        },
-      }));
+    // Which app is calling decides which profile exists after this. Omitted
+    // means CUSTOMER, so the customer app, the website and older trainer
+    // builds all behave as before.
+    const role: UserRole = dto.role ?? 'CUSTOMER';
+
+    const user = existing
+      ? await this.accounts.ensureProfileFor(existing, role)
+      : await this.accounts.createAccount(dto.mobile, role);
 
     if (dto.device) {
       await this.registerDevice(user.id, dto.device);
@@ -328,27 +320,6 @@ export class AuthService {
         revokedAt: null,
       },
     });
-  }
-
-  /** Retries on the (vanishingly unlikely) unique-code collision. */
-  /**
-   * Allocates a referral code for a brand-new customer.
-   *
-   * The alphabet lives in `modules/customer/referral.ts` — codes get read aloud
-   * and typed back in, so it excludes 0/O and 1/I/L. This used to build one
-   * from `randomBytes(4).toString('hex')`, which could produce exactly those
-   * characters; old codes stay valid on input, but new ones are unambiguous.
-   */
-  private async generateReferralCode(): Promise<string> {
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const code = generateReferralCode();
-      const taken = await this.prisma.customerProfile.findUnique({
-        where: { referralCode: code },
-        select: { id: true },
-      });
-      if (!taken) return code;
-    }
-    throw new Error('Could not allocate a unique referral code');
   }
 }
 

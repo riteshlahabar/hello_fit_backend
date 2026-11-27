@@ -43,10 +43,16 @@ export class InstructorRepository {
   }
 
   /**
-   * Creates the application and grants the INSTRUCTOR role in one transaction.
+   * Writes the application and grants the INSTRUCTOR role in one transaction.
    * A profile without the role would be invisible to `RolesGuard`, and the role
    * without a profile would 404 on every instructor route — the pair must land
    * together or not at all.
+   *
+   * An upsert, not a create: registering in the trainer app already leaves an
+   * unnamed stub row (`auth/account-provisioning.ts`, client 27-11-2026), and
+   * the wizard is what fills it in. `userId` is unique, so the stub is found
+   * by it. The service decides whether an existing row is a stub or a real
+   * application to reject.
    */
   createApplication(
     userId: string,
@@ -65,7 +71,11 @@ export class InstructorRepository {
         });
       }
 
-      return tx.instructorProfile.create({ data: { ...data, userId } });
+      return tx.instructorProfile.upsert({
+        where: { userId },
+        create: { ...data, userId },
+        update: data,
+      });
     });
   }
 

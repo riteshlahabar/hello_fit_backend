@@ -4,6 +4,7 @@ import { AdminAuthController, AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { TokenService } from './token.service';
+import { AccountProvisioningService } from './account-provisioning';
 
 /**
  * JwtModule is registered without a secret on purpose: access and refresh
@@ -12,7 +13,12 @@ import { TokenService } from './token.service';
 @Module({
   imports: [JwtModule.register({})],
   controllers: [AuthController, AdminAuthController],
-  providers: [AuthService, OtpService, TokenService],
+  providers: [
+    AuthService,
+    OtpService,
+    TokenService,
+    AccountProvisioningService,
+  ],
   exports: [AuthService, TokenService],
 })
 export class AuthModule {}

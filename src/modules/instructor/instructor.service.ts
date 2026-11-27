@@ -49,8 +49,12 @@ export class InstructorService {
    * duplicate would surface as a raw Prisma error.
    */
   async apply(userId: string, dto: ApplyAsInstructorDto) {
+    // Registering in the trainer app now creates the profile row itself
+    // (client, 27-11-2026), so finding one is no longer proof of a second
+    // application. The stub it leaves has no name; anything named is a real
+    // application and still conflicts.
     const existing = await this.repo.findProfileByUserId(userId);
-    if (existing) {
+    if (existing && existing.name !== '') {
       throw new ConflictException({
         code: ErrorCode.APPLICATION_EXISTS,
         message: 'An application already exists for this account',
