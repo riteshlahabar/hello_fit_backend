@@ -1,5 +1,5 @@
 import { formatClock, splitClock } from '../../common/dates/clock';
-import { initialsOf, rupees, shortNameOf, statusLabelOf } from './trainer-view';
+import { rupees, shortNameOf, statusLabelOf } from './trainer-view';
 
 /** `.schedule` on page 24 — the two-line time, the service, the client. */
 export function toScheduleEntry(row: {
@@ -21,30 +21,6 @@ export function toScheduleEntry(row: {
     clientLine: `Client: ${shortNameOf(row.booking.customer.name)} · ${row.durationMin} min`,
     status: row.status === 'COMPLETED' ? 'DONE' : statusLabelOf(row.status),
     startsAt: formatClock(row.fromMinute),
-  };
-}
-
-/** `.request` on page 24 — just enough to decide whether to open page 31. */
-export function toRequestPreview(row: {
-  id: string;
-  mode: string;
-  session: {
-    id: string;
-    service: { name: string };
-    booking: { customer: { name: string } };
-  };
-}) {
-  const name = row.session.booking.customer.name;
-
-  return {
-    id: row.id,
-    // Page 24's "Review" opens page 32, which is keyed by the session, not by
-    // the assignment the trainer is answering.
-    sessionId: row.session.id,
-    initials: initialsOf(name),
-    title: 'New client request',
-    subtitle: `From ${shortNameOf(name)} · ${row.session.service.name}`,
-    mode: row.mode,
   };
 }
 
