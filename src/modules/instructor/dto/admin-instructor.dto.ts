@@ -74,17 +74,26 @@ export class VerifyDocumentDto {
 }
 
 /**
- * Moves an applicant through the pipeline. The reason is mandatory and always
- * recorded: every stage change is an auditable admin action (spec 10.1).
+ * Moves an applicant through the pipeline. Every stage change is an auditable
+ * admin action (spec 10.1), so whatever note is given is always recorded.
+ *
+ * **The note is required on a rejection and optional otherwise** (client,
+ * 26-11-2026): a rejected applicant must be told why, an approved one needs
+ * no explanation. It is still validated whenever it is sent, so an approval
+ * note cannot be a stray character.
  */
 export class ChangeOnboardingStageDto {
   @IsEnum(OnboardingStage)
   stage!: OnboardingStage;
 
-  @IsString()
+  @ValidateIf(
+    (dto: ChangeOnboardingStageDto) =>
+      dto.stage === OnboardingStage.REJECTED || dto.reason !== undefined,
+  )
+  @IsString({ message: 'A note is required when rejecting an applicant' })
   @MinLength(3)
   @MaxLength(500)
-  reason!: string;
+  reason?: string;
 }
 
 /**

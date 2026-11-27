@@ -78,9 +78,9 @@ describe('missingDocuments', () => {
 
 describe('unverifiedDocuments', () => {
   it('ignores types that do not need verification', () => {
-    // PHOTO is required but not in verificationRequired.
+    // ADDRESS_PROOF is required but not in verificationRequired.
     const docs = fullSet().map((d) =>
-      d.docType === 'PHOTO' ? doc('PHOTO', 'PENDING') : d,
+      d.docType === 'ADDRESS_PROOF' ? doc('ADDRESS_PROOF', 'PENDING') : d,
     );
     expect(unverifiedDocuments(policy, docs)).toEqual([]);
   });
@@ -142,7 +142,7 @@ describe('deriveKycStatus', () => {
 
   it('ignores a rejected document of a type that needs no verification', () => {
     const docs = fullSet().map((d) =>
-      d.docType === 'PHOTO' ? doc('PHOTO', 'REJECTED') : d,
+      d.docType === 'ADDRESS_PROOF' ? doc('ADDRESS_PROOF', 'REJECTED') : d,
     );
     expect(deriveKycStatus(policy, docs)).toBe('VERIFIED');
   });

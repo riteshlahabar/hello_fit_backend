@@ -8,12 +8,14 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { InstructorService } from './instructor.service';
 import { InstructorDocumentService } from './instructor-document.service';
+import { InstructorOfferingService } from './instructor-offering.service';
 import type { UploadedFileLike } from './instructor-actor';
 import {
   AllowAudience,
@@ -25,6 +27,7 @@ import {
   UpdateInstructorProfileDto,
 } from './dto/instructor.dto';
 import { UploadDocumentDto } from './dto/instructor-document.dto';
+import { SetOwnServicesDto } from './dto/instructor-offering.dto';
 
 /**
  * The teacher's own onboarding, KYC uploads and profile (spec 3.6).
@@ -44,6 +47,7 @@ export class InstructorOnboardingController {
   constructor(
     private readonly instructors: InstructorService,
     private readonly docs: InstructorDocumentService,
+    private readonly offerings: InstructorOfferingService,
   ) {}
 
   // ------------------------------------------------------------ application
@@ -76,6 +80,35 @@ export class InstructorOnboardingController {
     return {
       data: await this.instructors.updateOwnProfile(userId, dto),
       message: 'Profile updated',
+    };
+  }
+
+  // ------------------------------------------------------------- offerings
+
+  /**
+   * The services this trainer delivers — page 15's second half.
+   *
+   * The catalogue itself is the public `GET /services?categoryId=`; this is
+   * only which of them the trainer has claimed, and whether ops approved each.
+   */
+  @Get('services')
+  @Roles('INSTRUCTOR')
+  async listServices(@CurrentUser('id') userId: string) {
+    const services = await this.offerings.listOwn(userId);
+    return { data: services, meta: { count: services.length } };
+  }
+
+  /** The array is the whole set — an id left out is withdrawn. */
+  @Put('services')
+  @Roles('INSTRUCTOR')
+  @HttpCode(200)
+  async setServices(
+    @CurrentUser('id') userId: string,
+    @Body() dto: SetOwnServicesDto,
+  ) {
+    return {
+      data: await this.offerings.setOwn(userId, dto),
+      message: 'Services saved and sent for approval',
     };
   }
 

@@ -114,7 +114,8 @@ check('cannot submit yet', applied?.data?.onboarding?.canSubmit, false);
 check(
   'every required document is listed as missing',
   applied?.data?.onboarding?.missingDocuments?.length,
-  7,
+  // Six since 26-11-2026: PHOTO left requiredDocuments with page 16's row.
+  6,
 );
 await call('POST', '/app/instructor/apply', { name: 'Twice' }, 409);
 

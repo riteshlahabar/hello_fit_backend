@@ -44,3 +44,21 @@ export function extensionFor(mimetype: string): string {
       return '';
   }
 }
+
+/**
+ * Whether a stored object can be shown inline as an image, from the extension
+ * on its key — the mirror of `extensionFor`, and the only thing the admin
+ * review page needs to decide between a thumbnail and a file tile.
+ *
+ * Read from the key rather than a column: there is no mime type on
+ * `documents`, and the key is written by `extensionFor` above, so the two
+ * cannot drift.
+ */
+export function fileKindFor(key: string | undefined): 'IMAGE' | 'PDF' | 'OTHER' {
+  const extension = (key ?? '').split('?')[0].split('.').pop()?.toLowerCase();
+
+  if (extension === 'jpg' || extension === 'jpeg') return 'IMAGE';
+  if (extension === 'png' || extension === 'webp') return 'IMAGE';
+  if (extension === 'pdf') return 'PDF';
+  return 'OTHER';
+}

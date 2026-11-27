@@ -13,11 +13,18 @@ import type { PrismaService } from '../../prisma/prisma.service';
  * half an applied selection is a provider advertising a service the admin
  * just took away.
  *
- * **Choosing is approving.** `InstructorService.approvedAt` is the switch
- * `provider-visibility.ts` reads, and the row-menu publish action that used to
- * write it is gone (client, same day: "remove services from action popup"), so
- * an admin's pick sets it. Nothing is published by accident: `PUBLIC_PROVIDER`
- * still demands `status: ACTIVE` and `kycStatus: VERIFIED` on top.
+ * **Choosing is approving — when ops is the one choosing.**
+ * `InstructorService.approvedAt` is the switch `provider-visibility.ts` reads,
+ * and the row-menu publish action that used to write it is gone (client, same
+ * day: "remove services from action popup"), so an admin's pick sets it.
+ * Nothing is published by accident: `PUBLIC_PROVIDER` still demands
+ * `status: ACTIVE` and `kycStatus: VERIFIED` on top.
+ *
+ * **A trainer's own pick does not approve itself** (`approve: false`, used by
+ * page 15). Spec 6.3: teacher-requested changes wait for Teacher Manager
+ * approval. So a row the trainer adds is created pending, and a row they
+ * already hold keeps whatever decision ops took on it — re-saving the screen
+ * must never retract an approval the trainer did not touch.
  *
  * **No category check here.** The dialog narrows the options to the categories
  * the provider chose at registration; the stored `specialisations` are free
@@ -30,6 +37,7 @@ export async function setInstructorServices(
   prisma: PrismaService,
   instructorId: string,
   serviceIds: string[],
+  options: { approve: boolean } = { approve: true },
 ) {
   const wanted = [...new Set(serviceIds)];
 
@@ -68,7 +76,10 @@ export async function setInstructorServices(
 
   await prisma.$transaction([
     ...existing
-      .filter((row) => !wanted.includes(row.serviceId) && published(row))
+      // `isActive`, not `published`: once a trainer can add their own rows,
+      // an active-but-unapproved one they then deselected has to be withdrawn
+      // too, or it stays on their screen as still chosen forever.
+      .filter((row) => !wanted.includes(row.serviceId) && row.isActive)
       .map((row) =>
         prisma.instructorService.update({
           where: { id: row.id },
@@ -89,12 +100,18 @@ export async function setInstructorServices(
               isActive: true,
               deletedAt: null,
               // Keep the original approval instant where there is one, so the
-              // audit trail does not restate a decision nobody retook.
-              approvedAt: row.approvedAt ?? now,
+              // audit trail does not restate a decision nobody retook. A
+              // trainer's own save never grants one it did not already have.
+              approvedAt: options.approve ? (row.approvedAt ?? now) : row.approvedAt,
             },
           })
         : prisma.instructorService.create({
-            data: { instructorId, serviceId, isActive: true, approvedAt: now },
+            data: {
+              instructorId,
+              serviceId,
+              isActive: true,
+              approvedAt: options.approve ? now : null,
+            },
           });
     }),
   ]);

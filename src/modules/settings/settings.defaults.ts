@@ -125,8 +125,8 @@ export interface OnboardingPolicy {
   requiredDocuments: string[];
   /**
    * Must be `VERIFIED` before the applicant can reach `APPROVED`. A subset of
-   * `requiredDocuments`: a yoga certificate is checked by a human, a photo is
-   * not worth blocking approval on.
+   * `requiredDocuments`: a yoga certificate is checked by a human, an address
+   * proof is not worth blocking approval on.
    */
   verificationRequired: string[];
   /** Pipeline steps that may be skipped — ops reality, not every hire demos. */
@@ -251,6 +251,8 @@ export const DEFAULT_SETTINGS: HelloFitSettings = {
     // Working assumption: empanelled teachers, so PAN and bank details are
     // needed to pay them and police verification is needed to send them into
     // a customer's home. Confirm with the client (spec section 12).
+    // No PHOTO here (client, 26-11-2026): the profile photo is taken on page
+    // 12's basic information, so page 16 must not ask for it a second time.
     requiredDocuments: [
       'ID_PROOF',
       'ADDRESS_PROOF',
@@ -258,7 +260,6 @@ export const DEFAULT_SETTINGS: HelloFitSettings = {
       'BANK_DETAILS',
       'YOGA_CERTIFICATION',
       'POLICE_VERIFICATION',
-      'PHOTO',
     ],
     verificationRequired: [
       'ID_PROOF',

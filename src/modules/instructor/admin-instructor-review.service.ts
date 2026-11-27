@@ -13,9 +13,11 @@ import {
   canTransition,
   deriveKycStatus,
 } from './onboarding';
+import { publishPendingOfferings } from './offering-publish';
 import { AuditService } from '../audit/audit.service';
 import { NotificationService } from '../notification/notification.service';
 import { SettingsService } from '../settings/settings.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { ErrorCode } from '../../common/errors/error-codes';
 import type { AdminActor } from './instructor-actor';
 import type {
@@ -41,6 +43,7 @@ export class AdminInstructorReviewService {
     private readonly settings: SettingsService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -164,13 +167,15 @@ export class AdminInstructorReviewService {
         !profile.joinedAt && { joinedAt: new Date() }),
     });
 
+    const published = await publishPendingOfferings(this.prisma, updated);
+
     await this.audit.record({
       adminUserId: actor.adminUserId,
       action: 'instructor.stage_changed',
       entityType: 'InstructorProfile',
       entityId: profile.id,
       before: { onboardingStage: profile.onboardingStage },
-      after: { onboardingStage: updated.onboardingStage },
+      after: { onboardingStage: updated.onboardingStage, published },
       reason: dto.reason,
       ipAddress: actor.ipAddress,
       requestId: actor.requestId,
@@ -179,7 +184,10 @@ export class AdminInstructorReviewService {
     await this.notifications.emit('onboarding.stage_changed', {
       instructor: { instructorId: profile.id },
       admin: true,
-      data: { stage: dto.stage, reason: dto.reason },
+      // The note is optional on an approval (client, 26-11-2026), and the copy
+      // interpolates `{{reason}}` — an empty string drops it from the message
+      // instead of printing "undefined" to the trainer.
+      data: { stage: dto.stage, reason: dto.reason ?? '' },
     });
 
     this.logger.log(

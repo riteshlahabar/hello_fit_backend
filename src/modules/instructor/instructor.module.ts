@@ -8,6 +8,7 @@ import { DocumentExpiryService } from './document-expiry.service';
 import { InstructorBankController } from './instructor-bank.controller';
 import { InstructorBankService } from './instructor-bank.service';
 import { InstructorDocumentService } from './instructor-document.service';
+import { InstructorOfferingService } from './instructor-offering.service';
 import { InstructorOnboardingController } from './instructor-onboarding.controller';
 import { InstructorProfileLookup } from './instructor-profile.lookup';
 import { InstructorRepository } from './instructor.repository';
@@ -36,6 +37,7 @@ import { StorageModule } from '../storage/storage.module';
   providers: [
     InstructorService,
     InstructorDocumentService,
+    InstructorOfferingService,
     AdminInstructorService,
     AdminInstructorReviewService,
     AdminInstructorManageService,

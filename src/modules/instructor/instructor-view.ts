@@ -13,6 +13,7 @@ import {
 } from '../../common/dates/format';
 import type { OnboardingStage } from '../../generated/prisma/enums';
 import type { OnboardingPolicy } from '../settings/settings.defaults';
+import { fileKindFor } from './instructor-files';
 
 /**
  * What an instructor profile and its documents look like on the wire.
@@ -121,6 +122,10 @@ export function documentView<T extends DocumentForView>(document: T) {
 
   return {
     ...rest,
+    // Image or PDF, from the key's extension — the admin review page shows a
+    // thumbnail for one and a file tile for the other, and the key itself
+    // never leaves the server.
+    fileKind: fileKindFor(document.fileUrl),
     issueDate: formatDateOrNull(document.issueDate),
     expiryDate: formatDateOrNull(document.expiryDate),
     ...(('verifiedAt' in document) && {
