@@ -13,7 +13,10 @@ import {
   canTransition,
   deriveKycStatus,
 } from './onboarding';
-import { publishPendingOfferings } from './offering-publish';
+import {
+  publishPendingOfferings,
+  withdrawPublishedOfferings,
+} from './offering-publish';
 import { AuditService } from '../audit/audit.service';
 import { NotificationService } from '../notification/notification.service';
 import { SettingsService } from '../settings/settings.service';
@@ -168,6 +171,15 @@ export class AdminInstructorReviewService {
     });
 
     const published = await publishPendingOfferings(this.prisma, updated);
+    // The inverse, in the same breath: a trainer who leaves `APPROVED` or
+    // lands on `REJECTED` must leave the homepage with the same single click
+    // that put them there.
+    const withdrawn = await withdrawPublishedOfferings(
+      this.prisma,
+      updated,
+      profile.onboardingStage,
+      dto.stage,
+    );
 
     await this.audit.record({
       adminUserId: actor.adminUserId,
@@ -175,7 +187,7 @@ export class AdminInstructorReviewService {
       entityType: 'InstructorProfile',
       entityId: profile.id,
       before: { onboardingStage: profile.onboardingStage },
-      after: { onboardingStage: updated.onboardingStage, published },
+      after: { onboardingStage: updated.onboardingStage, published, withdrawn },
       reason: dto.reason,
       ipAddress: actor.ipAddress,
       requestId: actor.requestId,

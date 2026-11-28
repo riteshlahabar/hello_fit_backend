@@ -11,10 +11,18 @@ import type { Prisma } from '../../generated/prisma/client';
  * unreachable from the list but reachable by guessing their id, and that is a
  * disclosure bug, not a cosmetic one.
  *
- * Four conditions, each for its own reason:
+ * Five conditions, each for its own reason:
  *
  * - `deletedAt: null` — soft deletes are gone, not hidden.
  * - `status: ACTIVE` — suspended and blacklisted providers disappear.
+ * - `onboardingStage: not REJECTED` — belt and braces beside
+ *   `withdrawPublishedOfferings`, which clears `approvedAt` on a rejection.
+ *   The stage is checked here as well because the offering approval is
+ *   written by one route and read by three, and a rejected trainer who kept a
+ *   stale `approvedAt` — every one of them, before 28-11-2026 — was public.
+ *   This also retires those rows with no backfill. Not `stage: APPROVED`:
+ *   an admin-created trainer is live at `APPLIED` with offerings ops approved
+ *   by hand, and demanding `APPROVED` would hide every one of them.
  * - `kycStatus: VERIFIED` — identity checked before a stranger is sent to a
  *   customer's home. This is the one that makes the rule a safety rule.
  * - at least one **approved and active** service offering. The schema has
@@ -27,6 +35,7 @@ export const PUBLIC_PROVIDER: Prisma.InstructorProfileWhereInput = {
   deletedAt: null,
   status: 'ACTIVE',
   kycStatus: 'VERIFIED',
+  onboardingStage: { not: 'REJECTED' },
   instructorServices: {
     some: {
       deletedAt: null,

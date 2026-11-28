@@ -122,6 +122,52 @@ await withAdmin(async () => {
   const stillLive = await findInSearch();
   check('still listed, on the approved service alone', stillLive?.serviceCount, 1);
 
+  section('reject — and the trainer leaves every public surface');
+
+  // The stage machine has no APPROVED -> REJECTED edge (allowedTransitions):
+  // ops steps a live trainer back first. That step is already a withdrawal,
+  // which is the point — the homepage must not wait for the second click.
+  const stageTo = (stage, reason) =>
+    call('POST', `/admin/instructors/${instructorId}/stage`, { stage, reason }, 200, 'admin');
+
+  const steppedBack = await stageTo('DOCUMENTS_SUBMITTED', 'reject smoke, step back');
+  check('stepped back out of APPROVED', steppedBack?.data?.onboarding?.stage, 'DOCUMENTS_SUBMITTED');
+
+  const unpublished = await call('GET', '/app/instructor/services', undefined, 200, 'instructor');
+  check('the offering was withdrawn', unpublished?.data?.every((r) => r.approved === false), true);
+  check('gone from public search on leaving APPROVED', await findInSearch(), undefined);
+
+  const rejected = await stageTo('REJECTED', 'reject smoke');
+  check('moved to REJECTED', rejected?.data?.onboarding?.stage, 'REJECTED');
+  check('still nowhere in search', await findInSearch(), undefined);
+
+  // The disclosure half: unreachable by guessing the id, not merely unlisted.
+  await call('GET', `/providers/${instructorId}`, undefined, 404, 'none');
+
+  // The other half of the fix, and the half that retires existing rows: even
+  // handed an `approvedAt` from before 28-11-2026, a REJECTED trainer is gone,
+  // because `PUBLIC_PROVIDER` now checks the stage too.
+  await t.cleanup(async (db) => {
+    await db.instructorService.updateMany({
+      where: { instructorId },
+      data: { approvedAt: new Date() },
+    });
+    check('a stale approval was planted', true, true);
+  });
+  check('a rejected trainer with a stale approval is still hidden', await findInSearch(), undefined);
+  await call('GET', `/providers/${instructorId}`, undefined, 404, 'none');
+
+  section('reopening republishes the set they registered with');
+
+  await stageTo('APPROVED', 'reject smoke, reopened');
+  const relisted = await findInSearch();
+  check('live again after re-approval', relisted?.name, trainerName);
+  // Two, not one: `publishPendingOfferings` approves everything pending at
+  // the moment of approval, so the service added after the first approval
+  // rides in on the re-approval. Pre-existing behaviour of that function, and
+  // defensible — ops reviews the whole record again to reopen an application.
+  check('both picks are live, the later one included', relisted?.serviceCount, 2);
+
   section('teardown');
   await t.cleanup(async (db) => {
     const user = await db.user.findFirst({ where: { mobile } });

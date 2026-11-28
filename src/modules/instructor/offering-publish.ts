@@ -54,3 +54,49 @@ export async function publishPendingOfferings(
 
   return pending.map((row) => row.service.name);
 }
+
+/**
+ * The counterpart, and the defect it closes (client, 28-11-2026: "rejected
+ * trainer dont show anywhere").
+ *
+ * `publishPendingOfferings` wrote `approvedAt` on approval and nothing ever
+ * cleared it, so a trainer ops later rejected kept every published offering —
+ * and `PUBLIC_PROVIDER` asks only for one approved active offering, never for
+ * the stage. The rejected trainer stayed on the homepage, in search, on their
+ * own profile URL and in a customer's Saved list.
+ *
+ * Deliberately narrow. It fires only when the move is **out of `APPROVED`**
+ * (ops stepping a live trainer back, which is how the stage machine reaches a
+ * rejection from `APPROVED` — see `allowedTransitions`) or **into
+ * `REJECTED`** from anywhere. It must not fire on an ordinary forward step,
+ * because an admin-created trainer sits at `APPLIED` while ops approves their
+ * services by hand in the Edit dialog: withdrawing there would silently undo
+ * a decision this function was never asked about.
+ */
+export async function withdrawPublishedOfferings(
+  prisma: PrismaService,
+  profile: { id: string },
+  previousStage: string,
+  nextStage: string,
+) {
+  const leavingApproved = previousStage === 'APPROVED';
+  const rejected = nextStage === 'REJECTED';
+  if (nextStage === 'APPROVED' || !(leavingApproved || rejected)) return [];
+
+  const live = await prisma.instructorService.findMany({
+    where: { instructorId: profile.id, approvedAt: { not: null } },
+    select: { id: true, service: { select: { name: true } } },
+  });
+
+  if (live.length === 0) return [];
+
+  // `approvedAt: null` only — `isActive` is the trainer's own switch and the
+  // approval is ops', so a reopened application (`REJECTED` -> `APPLIED` ->
+  // `APPROVED`) republishes exactly the set they registered with.
+  await prisma.instructorService.updateMany({
+    where: { id: { in: live.map((row) => row.id) } },
+    data: { approvedAt: null },
+  });
+
+  return live.map((row) => row.service.name);
+}
